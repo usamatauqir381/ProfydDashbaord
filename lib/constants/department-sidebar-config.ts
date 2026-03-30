@@ -1,0 +1,229 @@
+import {
+  LayoutDashboard,
+  Users,
+  ClipboardList,
+  Clock,
+  BookOpen,
+  MessageSquare,
+  Calendar,
+  TrendingUp,
+  Award,
+  FileText,
+  Settings,
+  UserPlus,
+  Shield,
+  BarChart,
+  CheckSquare,
+  AlertCircle
+} from 'lucide-react'
+
+export const DEPARTMENT_SIDEBAR_ITEMS = {
+  training: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/training',
+      icon: LayoutDashboard,
+    },
+    {
+      title: 'Interviews',
+      href: '/dashboard/training/interviews',
+      icon: Users,
+      subItems: [
+        { title: 'All Interviews', href: '/dashboard/training/interviews' },
+        { title: 'New Interview', href: '/dashboard/training/interviews/new' },
+        { title: 'Analytics', href: '/dashboard/training/interviews/analytics' },
+      ]
+    },
+    {
+      title: 'Training Trials',
+      href: '/dashboard/training/trials',
+      icon: ClipboardList,
+      subItems: [
+        { title: 'All Trials', href: '/dashboard/training/trials' },
+        { title: 'Week 1 Evaluation', href: '/dashboard/training/trials/week1-evaluation' },
+        { title: 'Week 2 Evaluation', href: '/dashboard/training/trials/week2-evaluation' },
+        { title: 'Final Decision', href: '/dashboard/training/trials/final-decision' },
+      ]
+    },
+    {
+      title: 'Attendance',
+      href: '/dashboard/training/attendance',
+      icon: Clock,
+      subItems: [
+        { title: 'Daily Attendance', href: '/dashboard/training/attendance/daily' },
+        { title: 'Monthly Summary', href: '/dashboard/training/attendance/monthly' },
+        { title: 'Tutors', href: '/dashboard/training/attendance/tutors' },
+        { title: 'Reports', href: '/dashboard/training/attendance/reports' },
+      ]
+    },
+    {
+      title: 'Training Summary',
+      href: '/dashboard/training/training-summary',
+      icon: BookOpen,
+      subItems: [
+        { title: 'Workshops', href: '/dashboard/training/training-summary/workshops' },
+        { title: 'Monthly Stats', href: '/dashboard/training/training-summary/monthly-stats' },
+      ]
+    },
+    {
+      title: 'Parent Feedback',
+      href: '/dashboard/training/feedback',
+      icon: MessageSquare,
+      subItems: [
+        { title: 'All Feedback', href: '/dashboard/training/feedback' },
+        { title: 'Complaints', href: '/dashboard/training/feedback/complaints' },
+        { title: 'Appreciation', href: '/dashboard/training/feedback/appreciation' },
+        { title: 'Resolution', href: '/dashboard/training/feedback/resolution' },
+        { title: 'Analytics', href: '/dashboard/training/feedback/analytics' },
+      ]
+    },
+    {
+      title: 'PTM Records',
+      href: '/dashboard/training/ptm',
+      icon: Calendar,
+      subItems: [
+        { title: 'Scheduled', href: '/dashboard/training/ptm/scheduled' },
+        { title: 'Completed', href: '/dashboard/training/ptm/completed' },
+        { title: 'Summary', href: '/dashboard/training/ptm/summary' },
+      ]
+    },
+    {
+      title: 'Quality Assurance',
+      href: '/dashboard/training/quality-assurance',
+      icon: TrendingUp,
+      subItems: [
+        { title: 'Observations', href: '/dashboard/training/quality-assurance' },
+        { title: 'New Observation', href: '/dashboard/training/quality-assurance/new-observation' },
+        { title: 'Scheduled', href: '/dashboard/training/quality-assurance/scheduled' },
+        { title: 'Performance', href: '/dashboard/training/quality-assurance/performance' },
+      ]
+    },
+    {
+      title: 'Retention',
+      href: '/dashboard/training/retention',
+      icon: TrendingUp,
+      subItems: [
+        { title: 'Monthly Stats', href: '/dashboard/training/retention' },
+        { title: 'Teachers', href: '/dashboard/training/retention/teachers' },
+        { title: 'Resigned', href: '/dashboard/training/retention/resigned' },
+        { title: 'Analytics', href: '/dashboard/training/retention/analytics' },
+      ]
+    },
+    {
+      title: 'Onboarding',
+      href: '/dashboard/training/onboarding',
+      icon: UserPlus,
+      subItems: [
+        { title: 'Overview', href: '/dashboard/training/onboarding' },
+        { title: 'Batches', href: '/dashboard/training/onboarding/batches' },
+        { title: 'Interviews', href: '/dashboard/training/onboarding/interviews' },
+        { title: 'Statistics', href: '/dashboard/training/onboarding/statistics' },
+      ]
+    },
+    {
+      title: 'Compliance',
+      href: '/dashboard/training/compliance',
+      icon: Shield,
+      subItems: [
+        { title: 'All Records', href: '/dashboard/training/compliance' },
+        { title: 'Violations', href: '/dashboard/training/compliance/violations' },
+        { title: 'Warnings', href: '/dashboard/training/compliance/warnings' },
+        { title: 'Reports', href: '/dashboard/training/compliance/reports' },
+      ]
+    },
+    {
+      title: 'Student Trials',
+      href: '/dashboard/training/student-trials',
+      icon: Users,
+      subItems: [
+        { title: 'All Trials', href: '/dashboard/training/student-trials' },
+        { title: 'Booked', href: '/dashboard/training/student-trials/booked' },
+        { title: 'Completed', href: '/dashboard/training/student-trials/completed' },
+        { title: 'Joined', href: '/dashboard/training/student-trials/joined' },
+        { title: 'Analytics', href: '/dashboard/training/student-trials/analytics' },
+      ]
+    },
+    {
+      title: 'Reports',
+      href: '/dashboard/training/reports',
+      icon: FileText,
+      subItems: [
+        { title: 'Daily', href: '/dashboard/training/reports/daily' },
+        { title: 'Weekly', href: '/dashboard/training/reports/weekly' },
+        { title: 'Monthly', href: '/dashboard/training/reports/monthly' },
+        { title: 'Quarterly', href: '/dashboard/training/reports/quarterly' },
+        { title: 'Yearly', href: '/dashboard/training/reports/yearly' },
+      ]
+    },
+    {
+      title: 'Settings',
+      href: '/dashboard/training/settings',
+      icon: Settings,
+      subItems: [
+        { title: 'General', href: '/dashboard/training/settings' },
+        { title: 'Tutors', href: '/dashboard/training/settings/tutors' },
+        { title: 'Templates', href: '/dashboard/training/settings/templates' },
+      ]
+    },
+  ],
+  
+  // Add empty arrays for other departments (to be filled later)
+  admin: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/admin',
+      icon: LayoutDashboard,
+    },
+  ],
+  ceo: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/ceo',
+      icon: LayoutDashboard,
+    },
+  ],
+  finance: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/finance',
+      icon: LayoutDashboard,
+    },
+  ],
+  hr: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/hr',
+      icon: LayoutDashboard,
+    },
+  ],
+  marketing: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/marketing',
+      icon: LayoutDashboard,
+    },
+  ],
+  recruitment: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/recruitment',
+      icon: LayoutDashboard,
+    },
+  ],
+  sales: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/sales',
+      icon: LayoutDashboard,
+    },
+  ],
+  support: [
+    {
+      title: 'Dashboard',
+      href: '/dashboard/support',
+      icon: LayoutDashboard,
+    },
+    
+    
+  ],
+} as const

@@ -1,0 +1,284 @@
+"use client"
+
+import { PageHeader } from "@/components/dashboard/page-header" 
+import { MetricCard } from "@/components/dashboard/metric-card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import {
+  Users,
+  TrendingUp,
+  DollarSign,
+  Wallet,
+  UserCheck,
+  Target,
+  Clock,
+  AlertTriangle,
+} from "@/components/icons"
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts"
+
+// Mock data for CEO dashboard
+const revenueData = [
+  { month: "Jan", revenue: 42000, target: 40000 },
+  { month: "Feb", revenue: 45000, target: 42000 },
+  { month: "Mar", revenue: 48000, target: 45000 },
+  { month: "Apr", revenue: 52000, target: 48000 },
+  { month: "May", revenue: 49000, target: 50000 },
+  { month: "Jun", revenue: 55000, target: 52000 },
+]
+
+const departmentPerformance = [
+  { name: "Support", value: 92, fill: "var(--support)" },
+  { name: "Sales", value: 88, fill: "var(--sales)" },
+  { name: "Finance", value: 95, fill: "var(--finance)" },
+  { name: "Marketing", value: 78, fill: "var(--marketing)" },
+  { name: "HR", value: 85, fill: "var(--hr)" },
+]
+
+const studentGrowth = [
+  { month: "Jan", active: 1200, new: 150, churned: 45 },
+  { month: "Feb", active: 1305, new: 180, churned: 52 },
+  { month: "Mar", active: 1433, new: 195, churned: 48 },
+  { month: "Apr", active: 1580, new: 210, churned: 55 },
+  { month: "May", active: 1735, new: 225, churned: 60 },
+  { month: "Jun", active: 1900, new: 240, churned: 58 },
+]
+
+const chartConfig = {
+  revenue: { label: "Revenue", color: "var(--chart-1)" },
+  target: { label: "Target", color: "var(--chart-2)" },
+  active: { label: "Active Students", color: "var(--chart-1)" },
+  new: { label: "New Students", color: "var(--chart-2)" },
+  churned: { label: "Churned", color: "var(--chart-5)" },
+}
+
+export default function CEODashboardPage() {
+  return (
+    <div className="flex flex-col">
+      <PageHeader
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "CEO Overview" },
+        ]}
+      />
+      
+      <main className="flex-1 p-6">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold">Executive Overview</h1>
+          <p className="mt-1 text-muted-foreground">
+            Key business metrics and performance indicators
+          </p>
+        </div>
+        
+        {/* Top KPIs */}
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            title="Active Students"
+            value="1,900"
+            icon={Users}
+            trend={{ value: 12.5, isPositive: true }}
+            description="vs last month"
+          />
+          <MetricCard
+            title="Net Growth"
+            value="+182"
+            icon={TrendingUp}
+            trend={{ value: 8.2, isPositive: true }}
+            description="new - churned"
+          />
+          <MetricCard
+            title="Monthly Revenue"
+            value="$55,000"
+            icon={DollarSign}
+            trend={{ value: 15.3, isPositive: true }}
+            description="vs last month"
+          />
+          <MetricCard
+            title="Cash Collected"
+            value="$48,500"
+            icon={Wallet}
+            trend={{ value: 5.8, isPositive: true }}
+            description="88% collection rate"
+          />
+        </div>
+        
+        {/* Second Row KPIs */}
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            title="Churn Rate"
+            value="3.1%"
+            icon={AlertTriangle}
+            trend={{ value: 0.5, isPositive: true }}
+            description="improved from 3.6%"
+          />
+          <MetricCard
+            title="Tutor Utilization"
+            value="87%"
+            icon={UserCheck}
+            trend={{ value: 4.2, isPositive: true }}
+            description="85 active tutors"
+          />
+          <MetricCard
+            title="CAC"
+            value="$125"
+            icon={Target}
+            trend={{ value: 8.0, isPositive: true }}
+            description="down from $136"
+          />
+          <MetricCard
+            title="Payback Period"
+            value="4.2 mo"
+            icon={Clock}
+            trend={{ value: 12.5, isPositive: true }}
+            description="improved efficiency"
+          />
+        </div>
+        
+        {/* Charts Row 1 */}
+        <div className="mb-8 grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Revenue vs Target</CardTitle>
+              <CardDescription>Monthly revenue performance against targets</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[300px]">
+                <AreaChart data={revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={12} tickFormatter={(v) => `$${v / 1000}k`} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area
+                    type="monotone"
+                    dataKey="target"
+                    stroke="var(--chart-2)"
+                    fill="var(--chart-2)"
+                    fillOpacity={0.1}
+                    strokeDasharray="5 5"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="var(--chart-1)"
+                    fill="var(--chart-1)"
+                    fillOpacity={0.3}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Student Growth Trends</CardTitle>
+              <CardDescription>Active, new, and churned students over time</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[300px]">
+                <BarChart data={studentGrowth}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={12} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="new" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="churned" fill="var(--chart-5)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Charts Row 2 */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle>Department Performance</CardTitle>
+              <CardDescription>Target achievement by department</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[250px]">
+                <PieChart>
+                  <Pie
+                    data={departmentPerformance}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {departmentPerformance.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              </ChartContainer>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {departmentPerformance.map((dept) => (
+                  <div key={dept.name} className="flex items-center gap-2 text-sm">
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: dept.fill }}
+                    />
+                    <span className="text-muted-foreground">{dept.name}</span>
+                    <span className="ml-auto font-medium">{dept.value}%</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Top Risks & Concerns</CardTitle>
+              <CardDescription>Items requiring executive attention</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-start gap-4 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-destructive" />
+                  <div>
+                    <p className="font-medium">Outstanding Receivables High</p>
+                    <p className="text-sm text-muted-foreground">
+                      $12,500 outstanding for 30+ days. Collection team following up.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-yellow-500" />
+                  <div>
+                    <p className="font-medium">Marketing CAC Trending Up</p>
+                    <p className="text-sm text-muted-foreground">
+                      WhatsApp AU campaign showing diminishing returns. Review recommended.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-yellow-500" />
+                  <div>
+                    <p className="font-medium">Tutor Capacity Constraint</p>
+                    <p className="text-sm text-muted-foreground">
+                      Morning shift at 95% capacity. 5 new tutors in recruitment pipeline.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    </div>
+  )
+}
