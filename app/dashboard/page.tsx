@@ -96,6 +96,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from "@/components/ui/sidebar"
+import { AccountSwitcher } from "@/components/dashboard/account-switcher"
 
 // Define department types
 type Department = 'training' | 'hr' | 'sales' | 'finance' | 'operations' | 'it' | 'support' | 'marketing' | 'customer_success'
@@ -237,7 +238,7 @@ interface Task {
 }
 
 export default function DepartmentDashboardPage() {
-  const { user } = useAuth()
+  const { user , signOut} = useAuth()
   const router = useRouter()
   const [department, setDepartment] = useState<Department>('training')
   const [loading, setLoading] = useState(true)
@@ -784,7 +785,9 @@ export default function DepartmentDashboardPage() {
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter/>
+      <SidebarFooter>
+        <AccountSwitcher user={user} signOut={signOut} />
+      </SidebarFooter>
     </Sidebar>
 
     {/* Main content */}

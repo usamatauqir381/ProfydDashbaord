@@ -24,6 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -71,7 +72,8 @@ import {
   Star,
   Target,
   Trophy,
-  TrendingDown
+  TrendingDown,
+  CreditCard,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -294,47 +296,98 @@ export function DepartmentSidebar({ departmentId }: DepartmentSidebarProps) {
       </div>
 
       {/* Footer with User Info */}
-      <SidebarFooter className="border-t p-4 shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 px-2 h-auto py-2"
-            >
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                  {getInitials()}
-                </AvatarFallback>
-              </Avatar>
+      <SidebarFooter className="border-t p-2 shrink-0">
+  <SidebarMenu>
+    <SidebarMenuItem>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <SidebarMenuButton
+            size="lg"
+            className="gap-3 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+          >
+            {/* Avatar */}
+            <Avatar className="h-8 w-8 rounded-lg">
+              <AvatarFallback className="rounded-lg bg-primary/10 text-primary text-xs">
+                {getInitials()}
+              </AvatarFallback>
+            </Avatar>
 
-              <div className="flex flex-1 flex-col items-start text-left">
-                <span className="text-sm font-medium text-sidebar-foreground">
-                  {user?.firstName || "User"} {user?.lastName || ""}
-                </span>
-                <span className="text-xs text-muted-foreground capitalize">
-                  {user?.role?.replace("_", " ") || "User"}
-                </span>
-              </div>
+            {/* Name + Role */}
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium">
+                {user?.firstName || "User"} {user?.lastName || ""}
+              </span>
+              <span className="truncate text-muted-foreground text-xs capitalize">
+                {user?.role?.replace("_", " ") || "User"}
+              </span>
+            </div>
 
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
+            {/* Icon */}
+            <MoreHorizontal className="ml-auto size-4" />
+          </SidebarMenuButton>
+        </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent
+          className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+          side="right"
+          align="end"
+          sideOffset={4}
+        >
+          {/* Top User Info */}
+          <div className="flex items-center gap-2 px-2 py-2 text-sm">
+            <Avatar className="h-8 w-8 rounded-lg">
+              <AvatarFallback className="rounded-lg">
+                {getInitials()}
+              </AvatarFallback>
+            </Avatar>
+
+            <div className="flex flex-col">
+              <span className="font-medium">
+                {user?.firstName} {user?.lastName}
+              </span>
+              <span className="text-xs text-muted-foreground capitalize">
+                {user?.role?.replace("_", " ")}
+              </span>
+            </div>
+          </div>
+
+          <DropdownMenuSeparator />
+
+          {/* Menu Items */}
+          <DropdownMenuGroup>
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile">Profile Settings</Link>
+              <Link href="/dashboard/profile">
+                <User className="mr-2 h-4 w-4" />
+                Profile
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={signOut}
-              className="text-destructive"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
+
+            <DropdownMenuItem>
+              <CreditCard className="mr-2 h-4 w-4" />
+              Billing
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarFooter>
+
+            <DropdownMenuItem>
+              <Bell className="mr-2 h-4 w-4" />
+              Notifications
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+
+          <DropdownMenuSeparator />
+
+          {/* Logout */}
+          <DropdownMenuItem
+            onClick={signOut}
+            className="text-destructive"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </SidebarMenuItem>
+  </SidebarMenu>
+</SidebarFooter>
     </Sidebar>
   )
 }

@@ -23,6 +23,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { DEPARTMENT_DISPLAY_NAMES } from "@/lib/constants/departments"
+import { ModeToggle } from "../mode-toggle"
 
 interface PageHeaderProps {
   title?: string
@@ -100,14 +101,15 @@ export function PageHeader({ title, department, breadcrumbs: propBreadcrumbs }: 
       
       <div className="ml-auto flex items-center gap-4">
         {/* Search */}
-        <div className="relative hidden md:block">
+        {/* <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
             placeholder="Search..."
             className="w-64 pl-9 bg-muted/50 border-0 focus-visible:ring-1"
           />
-        </div>
+        </div> */}
+        <ModeToggle/>
         
         {/* Notifications - ModeToggle removed */}
         <DropdownMenu>
