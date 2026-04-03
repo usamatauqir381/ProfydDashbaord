@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
-import { createAdminClient } from '../../../../lib/supabase/admin'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(request: Request) {
   try {

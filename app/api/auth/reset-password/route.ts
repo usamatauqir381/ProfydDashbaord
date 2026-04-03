@@ -1,98 +1,109 @@
-import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
+import { randomBytes } from 'crypto'
+import nodemailer from 'nodemailer'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
 function generateToken(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+  return randomBytes(32).toString('hex')
 }
 
 export async function POST(request: Request) {
-  console.log('🔵 API called: /api/auth/reset-password')
-  
   try {
     const { email } = await request.json()
-    console.log('🔵 Email received:', email)
-    
-    if (!email) {
-      console.log('🔴 No email provided')
-      return NextResponse.json(
-        { error: 'Email is required' },
-        { status: 400 }
-      )
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      console.log('🔴 Invalid email format')
-      return NextResponse.json(
-        { error: 'Please enter a valid email address' },
-        { status: 400 }
-      )
+    const supabase = createAdminClient()
+
+    // Check if user exists in Supabase Auth
+    let userExists = false
+    try {
+      const { data, error } = await supabase.auth.admin.listUsers()
+      if (error) {
+        console.error('listUsers error:', error)
+      } else {
+        userExists = data.users.some((u) => u.email?.toLowerCase() === email.toLowerCase())
+      }
+    } catch (err) {
+      console.error('User lookup error:', err)
     }
 
-    const supabase = await createClient()
-    console.log('🔵 Supabase client created')
-    
-    const code = generateCode()
-    const token = generateToken()
-    const expiresAt = new Date()
-    expiresAt.setMinutes(expiresAt.getMinutes() + 15)
+    // Always return success for security, even if user does not exist
+    if (!userExists) {
+      return NextResponse.json({ success: true, token: 'mock-token' })
+    }
 
-    console.log('🔵 Generated code:', code)
-    console.log('🔵 Generated token:', token)
-    console.log('🔵 Expires at:', expiresAt)
-
-    // Delete any existing unused tokens for this email
+    // Remove old unused tokens for this email
     const { error: deleteError } = await supabase
       .from('password_reset_tokens')
       .delete()
       .eq('email', email)
       .eq('used', false)
-    
+
     if (deleteError) {
-      console.log('🔴 Delete error:', deleteError)
-    } else {
-      console.log('🔵 Existing tokens deleted')
+      console.error('Delete old tokens error:', deleteError)
     }
 
-    // Store in database
+    const code = generateCode()
+    const token = generateToken()
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+
     const { error: insertError } = await supabase
       .from('password_reset_tokens')
       .insert({
         email,
-        token,
         code,
-        expires_at: expiresAt.toISOString(),
-        used: false
+        token,
+        expires_at: expiresAt,
+        used: false,
       })
 
     if (insertError) {
-      console.error('🔴 Insert error:', insertError)
-      return NextResponse.json(
-        { error: 'Failed to create reset request' },
-        { status: 500 }
-      )
+      console.error('Insert reset token error:', insertError)
+      return NextResponse.json({ error: 'Failed to create reset request' }, { status: 500 })
     }
 
-    console.log('🔵 Code stored in database')
-    console.log('=========================================')
-    console.log(`🔐 PASSWORD RESET CODE FOR ${email}: ${code}`)
-    console.log('=========================================')
-
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Reset code sent to your email',
-      token,
-      devCode: code
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
     })
-    
-  } catch (error) {
-    console.error('🔴 Reset password error:', error)
+
+    await transporter.verify()
+
+    await transporter.sendMail({
+      from: `"App Support" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Your Password Reset Code',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
+          <h2>Password Reset Request</h2>
+          <p>You requested to reset your password. Use the code below:</p>
+          <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; background: #f3f4f6; padding: 16px; text-align: center; border-radius: 8px;">
+            ${code}
+          </div>
+          <p>This code expires in 15 minutes.</p>
+          <p>If you did not request this, please ignore this email.</p>
+        </div>
+      `,
+    })
+
+    return NextResponse.json({
+      success: true,
+      token,
+    })
+  } catch (error: any) {
+    console.error('Reset password error:', error)
     return NextResponse.json(
-      { error: 'Internal server error. Please try again.' },
+      { error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' },
       { status: 500 }
     )
   }
