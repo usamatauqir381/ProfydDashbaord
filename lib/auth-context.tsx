@@ -11,7 +11,10 @@ interface AuthContextType {
   supabaseUser: SupabaseUser | null
   isLoading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (userData: SignUpData) => Promise<void>
+  signUp: (userData: SignUpData) => Promise<{
+  user: SupabaseUser | null
+  session: Session | null
+}>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   updatePassword: (newPassword: string) => Promise<void>
@@ -24,8 +27,9 @@ interface SignUpData {
   firstName: string
   middleName?: string
   lastName: string
-  department: Department
-  role: Role
+  department: Department | "teachers"
+  role: Role | "teacher"
+  phone?: string
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -42,16 +46,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('💾 Ensuring user exists in database:', authUser.email);
       
       const { error } = await supabase
-        .from('users')
-        .upsert({
-          id: authUser.id,
-          email: authUser.email || '',
-          company_name: authUser.user_metadata?.company_name || '',
-          first_name: authUser.user_metadata?.first_name || '',
-          last_name: authUser.user_metadata?.last_name || '',
-          department: authUser.user_metadata?.department || 'support',
-          role: authUser.user_metadata?.role || 'staff',
-        }, { onConflict: 'id' });
+  .from("users")
+  .upsert({
+    id: authUser.id,
+    email: authUser.email || "",
+    company_name: authUser.user_metadata?.company_name || "",
+    first_name: authUser.user_metadata?.first_name || "",
+    last_name: authUser.user_metadata?.last_name || "",
+    department: authUser.user_metadata?.department || "support",
+    role: authUser.user_metadata?.role || "staff",
+    phone: authUser.user_metadata?.phone || null,
+  }, { onConflict: "id" })
 
       if (error) {
         console.error('❌ Failed to ensure user in database:', error);
@@ -212,35 +217,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = useCallback(async (userData: SignUpData) => {
-    setIsLoading(true);
-    try {
-      console.log('📝 Signing up...', userData.email);
-      
-      const { error } = await supabase.auth.signUp({
-        email: userData.email,
-        password: userData.password,
-        options: {
-          data: {
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            company_name: userData.companyName,
-            department: userData.department,
-            role: userData.role,
-          },
+  setIsLoading(true)
+  try {
+    console.log("📝 Signing up...", userData.email)
+
+    const { data, error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+      options: {
+        data: {
+          first_name: userData.firstName,
+          last_name: userData.lastName,
+          company_name: userData.companyName,
+          department: userData.department,
+          role: userData.role,
+          phone: userData.phone || null,
         },
-      });
+      },
+    })
 
-      if (error) throw error;
-      
-      console.log('✅ Sign up successful');
-    } catch (error) {
-      console.error('❌ Sign up error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+    if (error) throw error
+
+    console.log("✅ Sign up successful")
+
+    return {
+      user: data.user,
+      session: data.session,
     }
-  }, []);
-
+  } catch (error) {
+    console.error("❌ Sign up error:", error)
+    throw error
+  } finally {
+    setIsLoading(false)
+  }
+}, [])
   const signOut = useCallback(async () => {
     try {
       console.log('🚪 Signing out...');

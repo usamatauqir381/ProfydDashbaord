@@ -45,7 +45,7 @@ export default function HRDashboardPage() {
         <p className="text-muted-foreground">Human resources overview and key metrics</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Total Headcount"
           value="140"
@@ -70,7 +70,7 @@ export default function HRDashboardPage() {
           change={-0.8}
           icon={UserMinus}
         />
-      </div>
+      </div> */}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="bg-card border-border">

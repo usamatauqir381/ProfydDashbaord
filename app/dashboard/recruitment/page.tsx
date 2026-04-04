@@ -47,7 +47,7 @@ export default function RecruitmentDashboardPage() {
         <p className="text-muted-foreground">Track hiring pipeline and recruitment metrics</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Open Positions"
           value="15"
@@ -72,7 +72,7 @@ export default function RecruitmentDashboardPage() {
           change={-5.4}
           icon={DollarSign}
         />
-      </div>
+      </div> */}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="bg-card border-border">

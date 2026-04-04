@@ -1,5 +1,6 @@
 // Department types
 export type Department =
+  | "ceo"
   | "support"
   | "sales"
   | "finance"
@@ -8,9 +9,9 @@ export type Department =
   | "recruitment"
   | "training"
   | "admin"
-  | "ceo"
+  | "teachers"
 
-export type Role = "team_lead" | "staff"
+export type Role = "staff" | "team_lead" | "teacher"
 
 // User type
 export interface User {

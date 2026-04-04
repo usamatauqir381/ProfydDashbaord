@@ -98,6 +98,23 @@ export const departments: DepartmentConfig[] = [
     ],
   },
   {
+  id: "teachers",
+  name: "Teachers",
+  description: "Teacher profiles, schedules, classes, trials, and performance",
+  icon: "GraduationCap",
+  color: "var(--teachers)",
+  pages: [
+    { id: "dashboard", name: "Dashboard", path: "/dashboard/teachers", icon: "LayoutDashboard" },
+    { id: "profile", name: "My Profile", path: "/dashboard/teachers/profile", icon: "User" },
+    { id: "students", name: "My Students", path: "/dashboard/teachers/students", icon: "Users" },
+    { id: "classes", name: "My Classes", path: "/dashboard/teachers/classes", icon: "BookOpen" },
+    { id: "schedule", name: "My Schedule", path: "/dashboard/teachers/schedule", icon: "Calendar" },
+    { id: "trials", name: "My Trials", path: "/dashboard/teachers/trials", icon: "ClipboardList" },
+    { id: "earnings", name: "My Earnings", path: "/dashboard/teachers/earnings", icon: "DollarSign" },
+    { id: "complaints", name: "Complaints", path: "/dashboard/teachers/complaints", icon: "MessageSquare" },
+  ],
+},
+  {
     id: "training",
     name: "Training & Development",
     description: "Teacher training, onboarding, and quality monitoring",
@@ -152,3 +169,4 @@ export function getDepartmentPages(departmentId: string) {
   const department = getDepartmentById(departmentId)
   return department?.pages || []
 }
+

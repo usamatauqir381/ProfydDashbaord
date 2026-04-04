@@ -1,6 +1,6 @@
 "use client"
 
-import { DashboardHeader } from "@/components/dashboard/header"
+// import { Header } from "@/components/dashboard/page-header"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
@@ -31,12 +31,12 @@ const chartConfig = {
 export default function MarketingDashboardPage() {
   return (
     <div className="flex flex-col">
-      <DashboardHeader
+      {/* <Header
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Marketing" },
         ]}
-      />
+      /> */}
       
       <main className="flex-1 p-6">
         <div className="mb-8">

@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
         <p className="text-muted-foreground">Manage office operations, assets, and expenses</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Monthly Expenses"
           value="$41,500"
@@ -68,7 +68,7 @@ export default function AdminDashboardPage() {
           change={7.1}
           icon={Truck}
         />
-      </div>
+      </div> */}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="bg-card border-border">
@@ -98,7 +98,7 @@ export default function AdminDashboardPage() {
             <ChartContainer config={chartConfig} className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
+                  {/* <Pie
                     data={assetDistribution}
                     cx="50%"
                     cy="50%"
@@ -111,7 +111,7 @@ export default function AdminDashboardPage() {
                     {assetDistribution.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
-                  </Pie>
+                  </Pie> */}
                   <ChartTooltip content={<ChartTooltipContent />} />
                 </PieChart>
               </ResponsiveContainer>

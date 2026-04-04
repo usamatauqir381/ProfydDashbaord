@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
@@ -27,20 +27,27 @@ import {
   CheckCircle,
   ArrowRight,
   Users,
-  Sparkles
+  Sparkles,
+  Phone,
+  GraduationCap,
+  Clock3
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { departments } from "@/lib/departments"
+import { supabase } from "@/lib/supabase/client"
+
+type AllowedRole = "staff" | "manager" | "team_lead" | "teacher"
 
 export default function SignUpPage() {
   const router = useRouter()
   const { signUp } = useAuth()
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -49,7 +56,13 @@ export default function SignUpPage() {
     lastName: "",
     companyName: "",
     department: "",
-    role: ""
+    role: "",
+    phone: "",
+    qualification: "",
+    experienceYears: "",
+    timezone: "Asia/Karachi",
+    canTakeTrials: "yes",
+    canTakeWeekendClasses: "yes",
   })
 
   const [passwordStrength, setPasswordStrength] = useState({
@@ -59,6 +72,20 @@ export default function SignUpPage() {
     hasNumber: false,
     hasSpecialChar: false
   })
+
+  const isTeacherDepartment = formData.department === "teachers"
+
+  const roleOptions = useMemo(() => {
+    if (isTeacherDepartment) {
+      return [{ label: "Teacher", value: "teacher" as AllowedRole }]
+    }
+
+    return [
+      { label: "Staff", value: "staff" as AllowedRole },
+      { label: "Manager", value: "manager" as AllowedRole },
+      { label: "Team Lead", value: "team_lead" as AllowedRole },
+    ]
+  }, [isTeacherDepartment])
 
   const validatePassword = (password: string) => {
     setPasswordStrength({
@@ -71,7 +98,20 @@ export default function SignUpPage() {
   }
 
   const handleChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value }
+
+      if (field === "department") {
+        if (value === "teachers") {
+          updated.role = "teacher"
+        } else if (updated.role === "teacher") {
+          updated.role = ""
+        }
+      }
+
+      return updated
+    })
+
     if (field === "password") {
       validatePassword(value)
     }
@@ -88,64 +128,130 @@ export default function SignUpPage() {
     return "bg-green-500"
   }
 
+  const createSignupRequest = async (userId: string) => {
+    const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim()
+
+    const { error } = await supabase.from("signup_requests").insert({
+      user_id: userId,
+      email: formData.email.trim().toLowerCase(),
+      full_name: fullName,
+      first_name: formData.firstName.trim(),
+      last_name: formData.lastName.trim(),
+      company_name: formData.companyName.trim() || null,
+      department: formData.department,
+      requested_role: formData.department === "teachers" ? "teacher" : formData.role,
+      request_status: isTeacherDepartment ? "pending_teacher_approval" : "pending",
+      phone: formData.phone.trim() || null,
+      qualification: isTeacherDepartment ? formData.qualification.trim() || null : null,
+      experience_years: isTeacherDepartment && formData.experienceYears
+        ? Number(formData.experienceYears)
+        : null,
+      timezone: isTeacherDepartment ? formData.timezone : null,
+      can_take_trials: isTeacherDepartment ? formData.canTakeTrials === "yes" : null,
+      can_take_weekend_classes: isTeacherDepartment ? formData.canTakeWeekendClasses === "yes" : null,
+      notes: isTeacherDepartment
+        ? "Teacher account submitted. Waiting for manager/admin approval."
+        : "Account submitted."
+    })
+
+    if (error) {
+      throw error
+    }
+  }
+  const finalRole = formData.department === "teachers" ? "teacher" : formData.role
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    
+
     if (!formData.email.trim()) {
       setError("Email is required")
       return
     }
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       setError("Please enter a valid email address")
       return
     }
+
     if (!formData.password) {
       setError("Password is required")
       return
     }
+
     if (formData.password.length < 8) {
       setError("Password must be at least 8 characters")
       return
     }
+
     if (getPasswordStrengthScore() < 3) {
       setError("Please choose a stronger password")
       return
     }
+
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match")
       return
     }
+
     if (!formData.firstName.trim()) {
       setError("First name is required")
       return
     }
+
     if (!formData.lastName.trim()) {
       setError("Last name is required")
       return
     }
 
+    if (!formData.department) {
+      setError("Department is required")
+      return
+    }
+
+    if (formData.department !== "teachers" && !formData.role) {
+  setError("Role is required")
+  return
+}
+
+    if (isTeacherDepartment) {
+      if (!formData.phone.trim()) {
+        setError("Phone is required for teachers")
+        return
+      }
+      if (!formData.qualification.trim()) {
+        setError("Qualification is required for teachers")
+        return
+      }
+    }
+
     setLoading(true)
 
     try {
-      await signUp({
-        email: formData.email.trim(),
-        password: formData.password,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        companyName: formData.companyName.trim(),
-        department: formData.department as any,
-        role: formData.role as any
-      })
-      
+      const signUpResult = await signUp({
+  email: formData.email.trim(),
+  password: formData.password,
+  firstName: formData.firstName.trim(),
+  lastName: formData.lastName.trim(),
+  companyName: formData.companyName.trim(),
+  department: formData.department as any,
+  role: finalRole as any,
+  phone: formData.phone.trim(),
+})
+
+const newUserId = signUpResult.user?.id
+
+if (newUserId) {
+  await createSignupRequest(newUserId)
+}
+
       setSuccess(true)
       setTimeout(() => {
         router.push("/sign-in?registered=true")
       }, 2000)
     } catch (error: any) {
       console.error("Sign up error:", error)
-      
-      if (error.message.includes("User already registered")) {
+
+      if (error.message?.includes("User already registered")) {
         setError("An account with this email already exists")
       } else {
         setError(error.message || "Failed to sign up. Please try again.")
@@ -157,7 +263,6 @@ export default function SignUpPage() {
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-gray-50 to-white dark:from-gray-950 dark:to-gray-900">
-      {/* Left Side - Brand/Illustration */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col items-center justify-center w-full px-12 text-white">
@@ -175,18 +280,18 @@ export default function SignUpPage() {
             >
               <Users className="h-12 w-12" />
             </motion.div>
-            
+
             <h1 className="text-5xl font-bold mb-4">Join Us Today</h1>
             <p className="text-xl text-white/90 mb-8 max-w-md">
               Create your account and start managing your business operations efficiently
             </p>
-            
+
             <div className="grid grid-cols-2 gap-4 mt-12">
               {[
-                "Free 14-day trial",
-                "No credit card required",
-                "Cancel anytime",
-                "Enterprise features"
+                "Teacher approval flow",
+                "Department-based signup",
+                "Secure role mapping",
+                "Scalable enterprise setup"
               ].map((feature, i) => (
                 <motion.div
                   key={feature}
@@ -202,20 +307,8 @@ export default function SignUpPage() {
             </div>
           </motion.div>
         </div>
-        
-        <div className="absolute inset-0 opacity-10">
-          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <defs>
-              <pattern id="grid-pattern" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
-                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" strokeWidth="0.5"/>
-              </pattern>
-            </defs>
-            <rect width="100" height="100" fill="url(#grid-pattern)" />
-          </svg>
-        </div>
       </div>
 
-      {/* Right Side - Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-8 overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
@@ -223,7 +316,6 @@ export default function SignUpPage() {
           transition={{ duration: 0.5 }}
           className="w-full max-w-lg"
         >
-          {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 mb-4">
               <Users className="h-8 w-8 text-white" />
@@ -241,70 +333,56 @@ export default function SignUpPage() {
                 Fill in your details to get started
               </CardDescription>
             </CardHeader>
+
             <CardContent className="px-0">
               <form onSubmit={handleSubmit} className="space-y-4">
                 {error && (
-                  <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                  >
-                    <Alert className="bg-red-50 border-red-200 text-red-600 dark:bg-red-950/30 dark:border-red-800">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  </motion.div>
+                  <Alert className="bg-red-50 border-red-200 text-red-600 dark:bg-red-950/30 dark:border-red-800">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
 
                 {success && (
-                  <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                  >
-                    <Alert className="bg-green-50 border-green-200 text-green-600 dark:bg-green-950/30">
-                      <CheckCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        Account created! Redirecting to sign in...
-                      </AlertDescription>
-                    </Alert>
-                  </motion.div>
+                  <Alert className="bg-green-50 border-green-200 text-green-600 dark:bg-green-950/30">
+                    <CheckCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Account created! Redirecting to sign in...
+                    </AlertDescription>
+                  </Alert>
                 )}
 
-                {/* Name Fields */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-gray-700 dark:text-gray-300 font-medium">
-                      First Name
-                    </Label>
+                    <Label htmlFor="firstName">First Name</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                       <Input
                         id="firstName"
                         value={formData.firstName}
                         onChange={(e) => handleChange("firstName", e.target.value)}
-                        className="pl-10 h-11 border-gray-200 dark:border-gray-800 rounded-xl"
+                        className="pl-10 h-11 rounded-xl"
                         placeholder="John"
                         disabled={loading || success}
                       />
                     </div>
                   </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-gray-700 dark:text-gray-300 font-medium">
-                      Last Name
-                    </Label>
+                    <Label htmlFor="lastName">Last Name</Label>
                     <Input
                       id="lastName"
                       value={formData.lastName}
                       onChange={(e) => handleChange("lastName", e.target.value)}
-                      className="h-11 border-gray-200 dark:border-gray-800 rounded-xl"
+                      className="h-11 rounded-xl"
                       placeholder="Doe"
                       disabled={loading || success}
                     />
                   </div>
                 </div>
 
-                {/* Company */}
                 <div className="space-y-2">
-                  <Label htmlFor="companyName" className="text-gray-700 dark:text-gray-300 font-medium">
+                  <Label htmlFor="companyName">
                     Company Name <span className="text-gray-400 text-sm">(Optional)</span>
                   </Label>
                   <div className="relative">
@@ -313,18 +391,168 @@ export default function SignUpPage() {
                       id="companyName"
                       value={formData.companyName}
                       onChange={(e) => handleChange("companyName", e.target.value)}
-                      className="pl-10 h-11 border-gray-200 dark:border-gray-800 rounded-xl"
+                      className="pl-10 h-11 rounded-xl"
                       placeholder="Your Company"
                       disabled={loading || success}
                     />
                   </div>
                 </div>
 
-                {/* Email */}
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-gray-700 dark:text-gray-300 font-medium">
-                    Email Address
-                  </Label>
+                  <Label htmlFor="department">Department</Label>
+                  <Select
+                    value={formData.department}
+                    onValueChange={(value) => handleChange("department", value)}
+                    disabled={loading || success}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl">
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                      {/* <SelectItem value="teachers">Teachers</SelectItem> */}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {formData.department !== "teachers" ? (
+  <div className="space-y-2">
+    <Label htmlFor="role">Role</Label>
+    <Select
+      value={formData.role}
+      onValueChange={(value) => handleChange("role", value)}
+      disabled={loading || success}
+    >
+      <SelectTrigger className="h-11 rounded-xl">
+        <SelectValue placeholder="Select role" />
+      </SelectTrigger>
+      <SelectContent>
+        {roleOptions.map((role) => (
+          <SelectItem key={role.value} value={role.value}>
+            {role.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
+) : (
+  <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+    Teachers department ke liye role automatically <strong>Teacher</strong> set hoga.
+  </div>
+)}
+
+                {isTeacherDepartment && (
+                  <div className="space-y-4 rounded-2xl border p-4 bg-muted/30">
+                    <div>
+                      <h3 className="font-semibold">Teacher Information</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Yeh fields teacher approval aur profile creation ke liye required hain.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Input
+                          id="phone"
+                          value={formData.phone}
+                          onChange={(e) => handleChange("phone", e.target.value)}
+                          className="pl-10 h-11 rounded-xl"
+                          placeholder="+92xxxxxxxxxx"
+                          disabled={loading || success}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="qualification">Qualification</Label>
+                      <div className="relative">
+                        <GraduationCap className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Input
+                          id="qualification"
+                          value={formData.qualification}
+                          onChange={(e) => handleChange("qualification", e.target.value)}
+                          className="pl-10 h-11 rounded-xl"
+                          placeholder="BS Mathematics"
+                          disabled={loading || success}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="experienceYears">Experience Years</Label>
+                      <div className="relative">
+                        <Clock3 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Input
+                          id="experienceYears"
+                          type="number"
+                          min="0"
+                          value={formData.experienceYears}
+                          onChange={(e) => handleChange("experienceYears", e.target.value)}
+                          className="pl-10 h-11 rounded-xl"
+                          placeholder="2"
+                          disabled={loading || success}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="timezone">Timezone</Label>
+                      <Input
+                        id="timezone"
+                        value={formData.timezone}
+                        onChange={(e) => handleChange("timezone", e.target.value)}
+                        className="h-11 rounded-xl"
+                        placeholder="Asia/Karachi"
+                        disabled={loading || success}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Can Take Trials</Label>
+                        <Select
+                          value={formData.canTakeTrials}
+                          onValueChange={(value) => handleChange("canTakeTrials", value)}
+                          disabled={loading || success}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="yes">Yes</SelectItem>
+                            <SelectItem value="no">No</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Weekend Classes</Label>
+                        <Select
+                          value={formData.canTakeWeekendClasses}
+                          onValueChange={(value) => handleChange("canTakeWeekendClasses", value)}
+                          disabled={loading || success}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="yes">Yes</SelectItem>
+                            <SelectItem value="no">No</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input
@@ -332,18 +560,15 @@ export default function SignUpPage() {
                       type="email"
                       value={formData.email}
                       onChange={(e) => handleChange("email", e.target.value)}
-                      className="pl-10 h-11 border-gray-200 dark:border-gray-800 rounded-xl"
+                      className="pl-10 h-11 rounded-xl"
                       placeholder="name@company.com"
                       disabled={loading || success}
                     />
                   </div>
                 </div>
 
-                {/* Password */}
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-gray-700 dark:text-gray-300 font-medium">
-                    Password
-                  </Label>
+                  <Label htmlFor="password">Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input
@@ -351,57 +576,37 @@ export default function SignUpPage() {
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
                       onChange={(e) => handleChange("password", e.target.value)}
-                      className="pl-10 pr-10 h-11 border-gray-200 dark:border-gray-800 rounded-xl"
+                      className="pl-10 pr-10 h-11 rounded-xl"
                       placeholder="Create a strong password"
                       disabled={loading || success}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                  
+
                   {formData.password && (
                     <div className="mt-2 space-y-2">
                       <div className="flex gap-1 h-1">
                         {[...Array(5)].map((_, i) => (
                           <div
                             key={i}
-                            className={`h-full flex-1 rounded-full transition-colors ${
+                            className={`h-full flex-1 rounded-full ${
                               i < getPasswordStrengthScore() ? getPasswordStrengthColor() : "bg-gray-200 dark:bg-gray-800"
                             }`}
                           />
                         ))}
                       </div>
-                      <div className="flex flex-wrap gap-3 text-xs">
-                        <span className={`${passwordStrength.hasMinLength ? 'text-green-600' : 'text-gray-400'}`}>
-                          ✓ 8+ chars
-                        </span>
-                        <span className={`${passwordStrength.hasUpperCase ? 'text-green-600' : 'text-gray-400'}`}>
-                          ✓ Uppercase
-                        </span>
-                        <span className={`${passwordStrength.hasLowerCase ? 'text-green-600' : 'text-gray-400'}`}>
-                          ✓ Lowercase
-                        </span>
-                        <span className={`${passwordStrength.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
-                          ✓ Number
-                        </span>
-                        <span className={`${passwordStrength.hasSpecialChar ? 'text-green-600' : 'text-gray-400'}`}>
-                          ✓ Special
-                        </span>
-                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Confirm Password */}
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-gray-700 dark:text-gray-300 font-medium">
-                    Confirm Password
-                  </Label>
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input
@@ -409,67 +614,23 @@ export default function SignUpPage() {
                       type={showConfirmPassword ? "text" : "password"}
                       value={formData.confirmPassword}
                       onChange={(e) => handleChange("confirmPassword", e.target.value)}
-                      className="pl-10 pr-10 h-11 border-gray-200 dark:border-gray-800 rounded-xl"
+                      className="pl-10 pr-10 h-11 rounded-xl"
                       placeholder="Confirm your password"
                       disabled={loading || success}
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Department & Role */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="department" className="text-gray-700 dark:text-gray-300 font-medium">
-                      Department
-                    </Label>
-                    <Select
-                      value={formData.department}
-                      onValueChange={(value) => handleChange("department", value)}
-                      disabled={loading || success}
-                    >
-                      <SelectTrigger className="h-11 border-gray-200 dark:border-gray-800 rounded-xl">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role" className="text-gray-700 dark:text-gray-300 font-medium">
-                      Role
-                    </Label>
-                    <Select
-                      value={formData.role}
-                      onValueChange={(value) => handleChange("role", value)}
-                      disabled={loading || success}
-                    >
-                      <SelectTrigger className="h-11 border-gray-200 dark:border-gray-800 rounded-xl">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="team_lead">Team Lead</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
                 <Button
                   type="submit"
-                  className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition-all duration-200"
+                  className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl"
                   disabled={loading || success}
                 >
                   {loading ? (
@@ -486,6 +647,7 @@ export default function SignUpPage() {
                 </Button>
               </form>
             </CardContent>
+
             <CardFooter className="px-0 pt-6">
               <div className="text-sm text-center text-gray-500 dark:text-gray-400 w-full">
                 Already have an account?{" "}
