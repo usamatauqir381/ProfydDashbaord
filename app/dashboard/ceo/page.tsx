@@ -66,12 +66,6 @@ const chartConfig = {
 export default function CEODashboardPage() {
   return (
     <div className="flex flex-col">
-      <PageHeader
-        breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: "CEO Overview" },
-        ]}
-      />
       
       <main className="flex-1 p-6">
         <div className="mb-8">
