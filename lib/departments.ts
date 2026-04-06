@@ -112,6 +112,11 @@ export const departments: DepartmentConfig[] = [
     { id: "trials", name: "My Trials", path: "/dashboard/teachers/trials", icon: "ClipboardList" },
     { id: "earnings", name: "My Earnings", path: "/dashboard/teachers/earnings", icon: "DollarSign" },
     { id: "complaints", name: "Complaints", path: "/dashboard/teachers/complaints", icon: "MessageSquare" },
+    { id: "teaching-record", name: "Teaching Record", path: "/dashboard/teachers/teaching-record", icon: "FileText" },
+    { id: "performance", name: "Performance", path: "/dashboard/teachers/performance", icon: "BarChart3" },
+    { id: "leaves", name: "Leaves", path: "/dashboard/teachers/leaves", icon: "PlaneTakeoff" },
+    { id: "notifications", name: "Notifications", path: "/dashboard/teachers/notifications", icon: "Bell" },
+    { id: "management", name: "Teachers Management", path: "/dashboard/teachers/management", icon: "ShieldCheck" },
   ],
 },
   {

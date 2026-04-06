@@ -24,36 +24,32 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 
-// Type for the user object
-interface User {
+interface UserType {
   firstName?: string
   lastName?: string
   role?: string
-  // Add other user fields as needed
 }
 
-// Props for the main component
 interface AccountSwitcherProps {
-  user: User | null
+  user: UserType | null
   signOut: () => void
-  /** Custom trigger button (if not provided, uses default sidebar button) */
   trigger?: ReactNode
-  /** Whether to wrap the trigger in SidebarMenuButton (default true when trigger not provided) */
   useSidebarStyle?: boolean
-  /** Additional menu items to inject before the logout item */
   extraMenuItems?: ReactNode
+  compact?: boolean
+  dropdownSide?: "top" | "right" | "bottom" | "left"
+  dropdownAlign?: "start" | "center" | "end"
 }
 
-// Helper to get initials
-const getInitials = (user: User | null): string => {
+const getInitials = (user: UserType | null): string => {
   if (!user) return "U"
   return `${user.firstName?.charAt(0) || ""}${user.lastName?.charAt(0) || ""}`
 }
 
-// Reusable dropdown content (can be used anywhere)
 interface UserMenuContentProps {
-  user: User | null
+  user: UserType | null
   signOut: () => void
   extraMenuItems?: ReactNode
 }
@@ -61,7 +57,6 @@ interface UserMenuContentProps {
 function UserMenuContent({ user, signOut, extraMenuItems }: UserMenuContentProps) {
   return (
     <>
-      {/* Top user info */}
       <div className="flex items-center gap-2 px-2 py-2 text-sm">
         <Avatar className="h-8 w-8 rounded-lg">
           <AvatarFallback className="rounded-lg">
@@ -80,7 +75,6 @@ function UserMenuContent({ user, signOut, extraMenuItems }: UserMenuContentProps
 
       <DropdownMenuSeparator />
 
-      {/* Default menu items */}
       <DropdownMenuGroup>
         <DropdownMenuItem asChild>
           <Link href="/dashboard/profile">
@@ -100,7 +94,6 @@ function UserMenuContent({ user, signOut, extraMenuItems }: UserMenuContentProps
         </DropdownMenuItem>
       </DropdownMenuGroup>
 
-      {/* Extra menu items (if any) */}
       {extraMenuItems && (
         <>
           <DropdownMenuSeparator />
@@ -110,7 +103,6 @@ function UserMenuContent({ user, signOut, extraMenuItems }: UserMenuContentProps
 
       <DropdownMenuSeparator />
 
-      {/* Logout */}
       <DropdownMenuItem onClick={signOut} className="text-destructive">
         <LogOut className="mr-2 h-4 w-4" />
         Sign Out
@@ -119,14 +111,30 @@ function UserMenuContent({ user, signOut, extraMenuItems }: UserMenuContentProps
   )
 }
 
-// Main AccountSwitcher component – now more flexible
 export function AccountSwitcher({
   user,
   signOut,
   trigger,
   useSidebarStyle = true,
   extraMenuItems,
+  compact = false,
+  dropdownSide = "right",
+  dropdownAlign = "end",
 }: AccountSwitcherProps) {
+  const compactTrigger = (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-10 w-10 rounded-xl border bg-background/50 hover:bg-muted"
+    >
+      <Avatar className="h-8 w-8 rounded-full">
+        <AvatarFallback className="rounded-full bg-primary/10 text-primary text-xs">
+          {getInitials(user)}
+        </AvatarFallback>
+      </Avatar>
+    </Button>
+  )
+
   const defaultTrigger = (
     <SidebarMenuButton
       size="lg"
@@ -142,7 +150,7 @@ export function AccountSwitcher({
         <span className="truncate font-medium">
           {user?.firstName || "User"} {user?.lastName || ""}
         </span>
-        <span className="truncate text-muted-foreground text-xs capitalize">
+        <span className="truncate text-xs capitalize text-muted-foreground">
           {user?.role?.replace("_", " ") || "User"}
         </span>
       </div>
@@ -151,16 +159,16 @@ export function AccountSwitcher({
     </SidebarMenuButton>
   )
 
+  const finalTrigger = trigger || (compact ? compactTrigger : defaultTrigger)
+
   const content = (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        {trigger || (useSidebarStyle ? defaultTrigger : defaultTrigger)}
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>{finalTrigger}</DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-        side="right"
-        align="end"
-        sideOffset={4}
+        className="min-w-56 rounded-lg"
+        side={dropdownSide}
+        align={dropdownAlign}
+        sideOffset={8}
       >
         <UserMenuContent
           user={user}
@@ -171,9 +179,7 @@ export function AccountSwitcher({
     </DropdownMenu>
   )
 
-  // If we are using the sidebar style (default), we wrap in SidebarMenu/SidebarMenuItem.
-  // Otherwise, we just return the dropdown directly.
-  if (useSidebarStyle && !trigger) {
+  if (useSidebarStyle && !trigger && !compact) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>{content}</SidebarMenuItem>
