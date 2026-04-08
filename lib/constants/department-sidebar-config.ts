@@ -236,14 +236,7 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
     title: "My Students",
     href: "/dashboard/teachers/students",
     icon: Users,
-    subItems: [
-      { title: "All Students", href: "/dashboard/teachers/students" },
-      { title: "Active", href: "/dashboard/teachers/students/active" },
-      { title: "Trial", href: "/dashboard/teachers/students/trial" },
-      { title: "Regular", href: "/dashboard/teachers/students/regular" },
-      { title: "Completed", href: "/dashboard/teachers/students/completed" },
-      { title: "Transferred", href: "/dashboard/teachers/students/transferred" },
-    ],
+    
   },
   {
     title: "My Classes",
@@ -255,125 +248,53 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
     title: "My Schedule",
     href: "/dashboard/teachers/schedule",
     icon: Calendar,
-    subItems: [
-      { title: "Overview", href: "/dashboard/teachers/schedule" },
-      { title: "Free Slots", href: "/dashboard/teachers/schedule/free-slots" },
-      { title: "Booked Slots", href: "/dashboard/teachers/schedule/booked-slots" },
-      { title: "Weekend", href: "/dashboard/teachers/schedule/weekend" },
-      { title: "Exceptions", href: "/dashboard/teachers/schedule/exceptions" },
-    ],
   },
   {
     title: "My Trials",
     href: "/dashboard/teachers/trials",
     icon: ClipboardList,
-    subItems: [
-      { title: "All Trials", href: "/dashboard/teachers/trials" },
-      { title: "Assigned", href: "/dashboard/teachers/trials/assigned" },
-      { title: "Today", href: "/dashboard/teachers/trials/today" },
-      { title: "Completed", href: "/dashboard/teachers/trials/completed" },
-      { title: "Won", href: "/dashboard/teachers/trials/won" },
-      { title: "Lost", href: "/dashboard/teachers/trials/lost" },
-      { title: "Pending Decision", href: "/dashboard/teachers/trials/pending-decision" },
-      { title: "Commission", href: "/dashboard/teachers/trials/commission" },
-    ],
   },
   {
     title: "My Earnings",
     href: "/dashboard/teachers/earnings",
     icon: DollarSign,
-    subItems: [
-      { title: "Overview", href: "/dashboard/teachers/earnings" },
-      { title: "Salary", href: "/dashboard/teachers/earnings/salary" },
-      { title: "Hourly", href: "/dashboard/teachers/earnings/hourly" },
-      { title: "Weekend", href: "/dashboard/teachers/earnings/weekend" },
-      { title: "Trials", href: "/dashboard/teachers/earnings/trials" },
-      { title: "Bonuses", href: "/dashboard/teachers/earnings/bonuses" },
-      { title: "Deductions", href: "/dashboard/teachers/earnings/deductions" },
-      { title: "Payouts", href: "/dashboard/teachers/earnings/payouts" },
-    ],
+    
   },
   {
     title: "Complaints",
     href: "/dashboard/teachers/complaints",
     icon: MessageSquare,
-    subItems: [
-      { title: "Overview", href: "/dashboard/teachers/complaints" },
-      { title: "Received", href: "/dashboard/teachers/complaints/received" },
-      { title: "Raised By Teacher", href: "/dashboard/teachers/complaints/raised-by-teacher" },
-      { title: "Student", href: "/dashboard/teachers/complaints/student" },
-      { title: "Parents", href: "/dashboard/teachers/complaints/parents" },
-      { title: "Support", href: "/dashboard/teachers/complaints/support" },
-      { title: "Training", href: "/dashboard/teachers/complaints/training" },
-      { title: "IT", href: "/dashboard/teachers/complaints/it" },
-      { title: "Resolved", href: "/dashboard/teachers/complaints/resolved" },
-      { title: "Pending", href: "/dashboard/teachers/complaints/pending" },
-    ],
+    
   },
   {
     title: "Teaching Record",
     href: "/dashboard/teachers/teaching-record",
     icon: FileText,
-    subItems: [
-      { title: "Overview", href: "/dashboard/teachers/teaching-record" },
-      { title: "Topics Covered", href: "/dashboard/teachers/teaching-record/topics-covered" },
-      { title: "Lesson Notes", href: "/dashboard/teachers/teaching-record/lesson-notes" },
-      { title: "Homework", href: "/dashboard/teachers/teaching-record/homework" },
-      { title: "Progress Updates", href: "/dashboard/teachers/teaching-record/progress-updates" },
-      { title: "Assessments", href: "/dashboard/teachers/teaching-record/assessments" },
-      { title: "Manual Entries", href: "/dashboard/teachers/teaching-record/manual-entries" },
-    ],
+    
   },
   {
     title: "Performance",
     href: "/dashboard/teachers/performance",
     icon: TrendingUp,
-    subItems: [
-      { title: "Overview", href: "/dashboard/teachers/performance" },
-      { title: "Class Delivery", href: "/dashboard/teachers/performance/class-delivery" },
-      { title: "Trial Conversion", href: "/dashboard/teachers/performance/trial-conversion" },
-      { title: "Student Retention", href: "/dashboard/teachers/performance/student-retention" },
-      { title: "Attendance", href: "/dashboard/teachers/performance/attendance" },
-      { title: "Ratings", href: "/dashboard/teachers/performance/ratings" },
-      { title: "Feedback", href: "/dashboard/teachers/performance/feedback" },
-    ],
+    
   },
   {
     title: "Leaves",
     href: "/dashboard/teachers/leaves",
     icon: Calendar,
-    subItems: [
-      { title: "Overview", href: "/dashboard/teachers/leaves" },
-      { title: "Apply", href: "/dashboard/teachers/leaves/apply" },
-      { title: "Approved", href: "/dashboard/teachers/leaves/approved" },
-      { title: "Pending", href: "/dashboard/teachers/leaves/pending" },
-      { title: "History", href: "/dashboard/teachers/leaves/history" },
-    ],
+    
   },
   {
     title: "Notifications",
     href: "/dashboard/teachers/notifications",
     icon: Bell,
-    subItems: [
-      { title: "Overview", href: "/dashboard/teachers/notifications" },
-      { title: "Class Alerts", href: "/dashboard/teachers/notifications/class-alerts" },
-      { title: "Trial Alerts", href: "/dashboard/teachers/notifications/trial-alerts" },
-      { title: "Complaints", href: "/dashboard/teachers/notifications/complaints" },
-      { title: "Salary", href: "/dashboard/teachers/notifications/salary" },
-    ],
+    
   },
   {
     title: "Management",
     href: "/dashboard/teachers/management",
     icon: Shield,
-    subItems: [
-      { title: "Overview", href: "/dashboard/teachers/management" },
-      { title: "Approvals", href: "/dashboard/teachers/management/approvals" },
-      { title: "Activation", href: "/dashboard/teachers/management/activation" },
-      { title: "Assignments", href: "/dashboard/teachers/management/assignments" },
-      { title: "Workload", href: "/dashboard/teachers/management/workload" },
-      { title: "Full Schedule", href: "/dashboard/teachers/management/full-schedule" },
-    ],
+    
   },
 ],
   support: [
