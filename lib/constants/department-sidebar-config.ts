@@ -168,6 +168,12 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
         { title: 'Templates', href: '/dashboard/training/settings/templates' },
       ]
     },
+    {
+      title: 'Approval',
+      href: '/dashboard/training/approvals',
+      icon: CheckSquare,
+    },
+
   ],
   
   // Add empty arrays for other departments (to be filled later)
@@ -177,6 +183,12 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
       href: '/dashboard/admin',
       icon: LayoutDashboard,
     },
+    {
+      title: 'Approvals',
+      href: '/dashboard/admin/approvals',
+      icon: CheckSquare,
+    },
+
   ],
   ceo: [
     {
@@ -303,7 +315,17 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
       href: '/dashboard/support',
       icon: LayoutDashboard,
     },
-    
+    {
+      title: 'Current Students',
+      href: '/dashboard/support/current-students',
+      icon: Users,
+      subItems: [
+        { title: 'Current', href: '/dashboard/support/current-students' },
+        { title: 'Followup', href: '/dashboard/support/current-students/followup' },
+        { title: 'LeftOut', href: '/dashboard/support/current-students/leftout' },
+
+      ]
+    },
     
   ],
 } as const
