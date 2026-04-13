@@ -326,6 +326,12 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
 
       ]
     },
+    {
+      title: 'Schedule',
+      href: '/dashboard/support/schedule',
+      icon: Calendar,
+    },
+
     
   ],
 } as const
