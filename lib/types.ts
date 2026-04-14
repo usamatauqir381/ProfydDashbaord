@@ -85,3 +85,20 @@ export interface PagePermission {
   canEdit: boolean
   canDelete: boolean
 }
+
+export interface ClassRecord {
+  id?: string;
+  date: string;
+  sort_order: number;
+  month_key?: string;
+  completed: {
+    soha: number; zainab: number; fatima: number; sam: number; alveena: number;
+    missRahat: number; sirUzair: number; sirAdnan: number; imaan: number; tazeen: number; anna: number;
+    dailyTotal: number;
+  };
+  cancelled: {
+    anna: number; imaan: number; soha: number; zainab: number; fatima: number; sam: number;
+    alveena: number; missRahat: number; sirUzair: number; sirAdnan: number; tazeen: number;
+    dailyTotal: number;
+  };
+}

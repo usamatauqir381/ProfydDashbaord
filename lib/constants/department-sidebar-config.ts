@@ -319,17 +319,21 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
       title: 'Current Students',
       href: '/dashboard/support/current-students',
       icon: Users,
-      subItems: [
-        { title: 'Current', href: '/dashboard/support/current-students' },
-        { title: 'Followup', href: '/dashboard/support/current-students/followup' },
-        { title: 'LeftOut', href: '/dashboard/support/current-students/leftout' },
-
-      ]
     },
     {
       title: 'Schedule',
       href: '/dashboard/support/schedule',
       icon: Calendar,
+    },
+    {
+      title: 'Class Tracker',
+      href: '/dashboard/support/lessons',
+      icon: BookOpen,
+    },
+    {
+      title: 'Complaints',
+      href: '/dashboard/support/complaints',
+      icon: MessageSquare,
     },
 
     
