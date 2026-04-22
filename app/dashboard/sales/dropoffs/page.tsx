@@ -1,7 +1,6 @@
 "use client"
 
-import { DashboardHeader } from "@/components/dashboard/header"
-import { DataForm } from "@/components/dashboard/data-form"
+// import { DataForm } from "@/components/dashboard/"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
@@ -36,13 +35,6 @@ export default function DropoffsPage() {
 
   return (
     <div className="flex flex-col">
-      <DashboardHeader
-        breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: "Sales", href: "/dashboard/sales" },
-          { label: "Drop-off Reasons" },
-        ]}
-      />
       
       <main className="flex-1 p-6">
         <div className="mb-8">
@@ -53,12 +45,12 @@ export default function DropoffsPage() {
         </div>
         
         <div className="grid gap-6 lg:grid-cols-2">
-          <DataForm
+          {/* <DataForm
             title="Enter Drop-off Data"
             description="Record reasons for lost leads"
             fields={dropoffFields}
             onSubmit={handleSubmit}
-          />
+          /> */}
           
           <div className="flex flex-col gap-6">
             <Card>

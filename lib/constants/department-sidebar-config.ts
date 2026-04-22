@@ -173,6 +173,11 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
       href: '/dashboard/training/approvals',
       icon: CheckSquare,
     },
+    {
+      title: 'Complaints',
+      href: '/dashboard/training/complaints',
+      icon: MessageSquare,
+    },
 
   ],
   
@@ -230,6 +235,12 @@ export const DEPARTMENT_SIDEBAR_ITEMS = {
       title: 'Dashboard',
       href: '/dashboard/sales',
       icon: LayoutDashboard,
+    },
+    {
+      title: 'Drop-off Reasons',
+      href: '/dashboard/sales/dropoffs',
+      
+      icon: AlertCircle,
     },
   ],
   teachers: [
