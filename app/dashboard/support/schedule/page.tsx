@@ -135,9 +135,8 @@ const MetricCard = ({
           )}
           {trend && (
             <p
-              className={`text-xs mt-1 flex items-center gap-1 ${
-                trend.isPositive ? 'text-green-600' : 'text-red-600'
-              }`}
+              className={`text-xs mt-1 flex items-center gap-1 ${trend.isPositive ? 'text-green-600' : 'text-red-600'
+                }`}
             >
               {trend.isPositive ? '↑' : '↓'} {trend.value}% from last week
             </p>
@@ -398,9 +397,8 @@ const MonthlyView = ({
           return (
             <div
               key={idx}
-              className={`min-h-[100px] p-2 rounded-lg border transition-all ${
-                day ? 'bg-card' : 'bg-muted/20'
-              }`}
+              className={`min-h-[100px] p-2 rounded-lg border transition-all ${day ? 'bg-card' : 'bg-muted/20'
+                }`}
             >
               {day && (
                 <>
@@ -541,47 +539,62 @@ export default function SchedulePage() {
     })
   }
 
-  useEffect(() => {
+  // useEffect(() => {
     const fetchStudents = async () => {
-      setFetchError('')
+  try {
+    setFetchError('')
 
-      const { data, error } = await supabase
-        .from(CURRENT_STUDENTS_TABLE)
-        .select(`
-          id,
-          student_id,
-          student_name,
-          parent_name,
-          grade_year,
-          learning_plan,
-          classes_per_w,
-          start_date
-        `)
-        .order('student_name', { ascending: true })
+    const { data, error } = await supabase
+      .from(CURRENT_STUDENTS_TABLE)
+      .select(`
+        id,
+        student_id,
+        student_name,
+        parent_name,
+        grade_year,
+        learning_plan,
+        classes_per_week,
+        start_date
+      `)
+      .order('student_name', { ascending: true })
 
-      if (error) {
-        console.error('CURRENT STUDENTS ERROR:', error)
-        setStudentsData([])
-        return
-      }
+    if (error) {
+      console.error('CURRENT STUDENTS ERROR:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        table: CURRENT_STUDENTS_TABLE,
+      })
 
-      const mappedStudents: StudentOption[] = (data || []).map((student: any) => ({
-        id: String(student.id),
-        studentId: student.student_id ?? '',
-        name: student.student_name ?? '',
-        parent: student.parent_name ?? '',
-        grade: String(student.grade_year ?? ''),
-        learningPlan: student.learning_plan ?? '',
-        classesPerWeek: Number(student.classes_per_w ?? 0),
-        startDate: student.start_date ?? '',
-        email: '',
-      }))
-
-      setStudentsData(mappedStudents)
+      setStudentsData([])
+      setFetchError(error.message || 'Failed to fetch students')
+      return
     }
 
+    const mappedStudents: StudentOption[] = (data ?? []).map((student: any) => ({
+      id: String(student.id ?? ''),
+      studentId: String(student.student_id ?? ''),
+      name: String(student.student_name ?? ''),
+      parent: String(student.parent_name ?? ''),
+      grade: String(student.grade_year ?? ''),
+      learningPlan: String(student.learning_plan ?? ''),
+      classesPerWeek: Number(student.classes_per_week ?? 0),
+      startDate: String(student.start_date ?? ''),
+      email: '',
+    }))
+
+    setStudentsData(mappedStudents)
+  } catch (err) {
+    console.error('CURRENT STUDENTS UNEXPECTED ERROR:', err)
+    setStudentsData([])
+    setFetchError('Unexpected error while fetching current students.')
+  }
+}
+useEffect(() => {
     fetchStudents()
   }, [])
+  
 
   useEffect(() => {
     const fetchTeachers = async () => {
@@ -650,9 +663,8 @@ export default function SchedulePage() {
       const mappedEvents: ScheduleEvent[] = (data || []).map((row) => ({
         id: row.id,
         teacherId: row.teacher_id,
-        title: `${row.subject || 'Class'} - ${
-          row.status.charAt(0).toUpperCase() + row.status.slice(1)
-        }`,
+        title: `${row.subject || 'Class'} - ${row.status.charAt(0).toUpperCase() + row.status.slice(1)
+          }`,
         start: new Date(`${row.class_date}T${row.start_time}`),
         end: new Date(`${row.class_date}T${row.end_time}`),
         status: row.status,
@@ -722,22 +734,17 @@ export default function SchedulePage() {
   }, [events, selectedTeacherId, statusFilter, subjectFilter, gradeFilter])
 
   const searchedStudents = useMemo(() => {
-    const query = studentSearch.trim().toLowerCase()
+  const query = studentSearch.trim().toLowerCase()
 
-    return studentsData.filter((student) => {
-      const matchesSearch =
-        query === '' ||
-        student.name.toLowerCase().includes(query) ||
-        student.studentId.toLowerCase().includes(query) ||
-        student.parent.toLowerCase().includes(query)
-
-      const matchesGrade =
-        newEventData.grade === '' ||
-        String(student.grade).trim() === String(newEventData.grade).trim()
-
-      return matchesSearch && matchesGrade
-    })
-  }, [studentsData, studentSearch, newEventData.grade])
+  return studentsData.filter((student) => {
+    return (
+      query === '' ||
+      student.name.toLowerCase().includes(query) ||
+      student.studentId.toLowerCase().includes(query) ||
+      student.parent.toLowerCase().includes(query)
+    )
+  })
+}, [studentsData, studentSearch])
 
   const metrics = useMemo(() => {
     const activeTeachers = teachersData.length
@@ -913,9 +920,8 @@ export default function SchedulePage() {
         const updatedEvent: ScheduleEvent = {
           id: row.id,
           teacherId: row.teacher_id,
-          title: `${row.subject} - ${
-            row.status.charAt(0).toUpperCase() + row.status.slice(1)
-          }`,
+          title: `${row.subject} - ${row.status.charAt(0).toUpperCase() + row.status.slice(1)
+            }`,
           start: new Date(`${row.class_date}T${row.start_time}`),
           end: new Date(`${row.class_date}T${row.end_time}`),
           status: row.status,
@@ -952,9 +958,8 @@ export default function SchedulePage() {
         const newEvent: ScheduleEvent = {
           id: row.id,
           teacherId: row.teacher_id,
-          title: `${row.subject} - ${
-            row.status.charAt(0).toUpperCase() + row.status.slice(1)
-          }`,
+          title: `${row.subject} - ${row.status.charAt(0).toUpperCase() + row.status.slice(1)
+            }`,
           start: new Date(`${row.class_date}T${row.start_time}`),
           end: new Date(`${row.class_date}T${row.end_time}`),
           status: row.status,
@@ -1065,7 +1070,7 @@ export default function SchedulePage() {
         const dayOffset =
           Math.floor(
             (startOfDay(event.start).getTime() - startOfDay(currentWeekStart).getTime()) /
-              (1000 * 60 * 60 * 24)
+            (1000 * 60 * 60 * 24)
           ) || 0
 
         const newDate = addDays(nextWeekStart, dayOffset)
@@ -1107,9 +1112,8 @@ export default function SchedulePage() {
         tempEvents.push({
           id: `temp-${Math.random()}`,
           teacherId: event.teacherId,
-          title: `${event.subject} - ${
-            event.status.charAt(0).toUpperCase() + event.status.slice(1)
-          }`,
+          title: `${event.subject} - ${event.status.charAt(0).toUpperCase() + event.status.slice(1)
+            }`,
           start: new Date(`${newDateStr}T${newStartTime}`),
           end: new Date(`${newDateStr}T${newEndTime}`),
           status: event.status,
@@ -1146,9 +1150,8 @@ export default function SchedulePage() {
       const copiedEvents: ScheduleEvent[] = (data || []).map((row) => ({
         id: row.id,
         teacherId: row.teacher_id,
-        title: `${row.subject || 'Class'} - ${
-          row.status.charAt(0).toUpperCase() + row.status.slice(1)
-        }`,
+        title: `${row.subject || 'Class'} - ${row.status.charAt(0).toUpperCase() + row.status.slice(1)
+          }`,
         start: new Date(`${row.class_date}T${row.start_time}`),
         end: new Date(`${row.class_date}T${row.end_time}`),
         status: row.status,
@@ -1317,11 +1320,10 @@ export default function SchedulePage() {
                     <button
                       key={teacher.id}
                       onClick={() => setSelectedTeacherId(teacher.id)}
-                      className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
-                        selectedTeacherId === teacher.id
+                      className={`w-full p-3 rounded-lg border-2 transition-all text-left ${selectedTeacherId === teacher.id
                           ? 'border-primary bg-primary/10'
                           : 'border-border hover:border-primary/50'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3">
                         <div
@@ -1706,93 +1708,93 @@ export default function SchedulePage() {
 
               {(newEventData.status === 'booked' ||
                 newEventData.status === 'reschedule') && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Search Student *</Label>
-                    <Input
-                      placeholder="Type student name, ID, or parent name"
-                      value={studentSearch}
-                      onChange={(e) => {
-                        setStudentSearch(e.target.value)
-                        setShowStudentResults(true)
-                      }}
-                      onFocus={() => setShowStudentResults(true)}
-                    />
-                  </div>
-
-                  {showStudentResults && studentSearch.trim() !== '' && (
-                    <div className="border rounded-lg max-h-48 overflow-y-auto bg-background">
-                      {searchedStudents.length > 0 ? (
-                        searchedStudents.map((student) => (
-                          <button
-                            key={student.id}
-                            type="button"
-                            className="w-full text-left px-3 py-2 hover:bg-muted border-b last:border-b-0"
-                            onClick={() => {
-                              setSelectedStudentId(student.id)
-                              setStudentSearch(student.name)
-                              setShowStudentResults(false)
-
-                              setNewEventData({
-                                ...newEventData,
-                                studentName: student.name,
-                                studentEmail: '',
-                                studentRecordId: student.id,
-                                studentCode: student.studentId,
-                                parentName: student.parent,
-                                grade: student.grade || newEventData.grade,
-                                learningPlan: student.learningPlan,
-                                classesPerWeek: student.classesPerWeek,
-                              })
-                            }}
-                          >
-                            <div className="font-medium">{student.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {student.studentId} • Parent: {student.parent} • Grade {student.grade}
-                            </div>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">
-                          No student found
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Student Name</Label>
-                      <Input value={newEventData.studentName} readOnly />
+                      <Label>Search Student *</Label>
+                      <Input
+                        placeholder="Type student name, ID, or parent name"
+                        value={studentSearch}
+                        onChange={(e) => {
+                          setStudentSearch(e.target.value)
+                          setShowStudentResults(true)
+                        }}
+                        onFocus={() => setShowStudentResults(true)}
+                      />
+                    </div>
+
+                    {showStudentResults && (
+                      <div className="border rounded-lg max-h-48 overflow-y-auto bg-background">
+                        {searchedStudents.length > 0 ? (
+                          searchedStudents.map((student) => (
+                            <button
+                              key={student.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-muted border-b last:border-b-0"
+                              onClick={() => {
+                                setSelectedStudentId(student.id)
+                                setStudentSearch(student.name)
+                                setShowStudentResults(false)
+
+                                setNewEventData({
+                                  ...newEventData,
+                                  studentName: student.name,
+                                  studentEmail: '',
+                                  studentRecordId: student.id,
+                                  studentCode: student.studentId,
+                                  parentName: student.parent,
+                                  grade: student.grade || newEventData.grade,
+                                  learningPlan: student.learningPlan,
+                                  classesPerWeek: student.classesPerWeek,
+                                })
+                              }}
+                            >
+                              <div className="font-medium">{student.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {student.studentId} • Parent: {student.parent} • Grade {student.grade}
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                            No student found
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Student Name</Label>
+                        <Input value={newEventData.studentName} readOnly />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Student ID</Label>
+                        <Input value={newEventData.studentCode} readOnly />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Parent</Label>
+                        <Input value={newEventData.parentName} readOnly />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Learning Plan</Label>
+                        <Input value={newEventData.learningPlan} readOnly />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Student ID</Label>
-                      <Input value={newEventData.studentCode} readOnly />
+                      <Label>Classes / Week</Label>
+                      <Input
+                        value={String(newEventData.classesPerWeek || '')}
+                        readOnly
+                      />
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Parent</Label>
-                      <Input value={newEventData.parentName} readOnly />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Learning Plan</Label>
-                      <Input value={newEventData.learningPlan} readOnly />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Classes / Week</Label>
-                    <Input
-                      value={String(newEventData.classesPerWeek || '')}
-                      readOnly
-                    />
-                  </div>
-                </div>
-              )}
+                )}
 
               {newEventData.status === 'trial' && (
                 <>
@@ -1866,8 +1868,8 @@ export default function SchedulePage() {
                   {editingEventId
                     ? 'Update Class'
                     : isSlotCreate
-                    ? 'Schedule Class'
-                    : 'Create Schedule'}
+                      ? 'Schedule Class'
+                      : 'Create Schedule'}
                 </Button>
               </div>
             </div>
