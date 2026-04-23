@@ -15,7 +15,6 @@ import {
   subMonths,
   parse,
   setHours,
-  setMinutes,
 } from 'date-fns'
 import {
   ChevronLeft,
@@ -25,11 +24,9 @@ import {
   Clock,
   BookOpen,
   TrendingUp,
-  AlertCircle,
-  CheckCircle,
-  UserPlus,
   Calendar,
   Search,
+  Copy,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -54,6 +51,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabase'
 
+const CURRENT_STUDENTS_TABLE = 'current_students'
+const SCHEDULE_START_HOUR = 8
+const SCHEDULE_END_HOUR = 20
+
 interface Teacher {
   id: string
   name: string
@@ -74,6 +75,11 @@ interface ScheduleEvent {
   status: 'available' | 'booked' | 'trial' | 'reschedule' | 'locked'
   studentName?: string
   studentEmail?: string
+  studentRecordId?: string
+  studentCode?: string
+  parentName?: string
+  learningPlan?: string
+  classesPerWeek?: number
   subject: string
   grade: string
   notes?: string
@@ -101,91 +107,14 @@ interface MonthlyViewProps extends ViewProps {
 
 interface StudentOption {
   id: string
+  studentId: string
   name: string
-  email: string
-  grade?: string
-}
-
-
-
-const SCHEDULE_START_HOUR = 8
-const SCHEDULE_END_HOUR = 20
-
-const generateMockEvents = (teachers: Teacher[]): ScheduleEvent[] => {
-  const events: ScheduleEvent[] = []
-  const startDate = startOfWeek(new Date(), { weekStartsOn: 1 })
-  const statuses: ScheduleEvent['status'][] = [
-    'available',
-    'booked',
-    'trial',
-    'reschedule',
-    'locked',
-  ]
-  const students = [
-    'Alex Miller',
-    'Jordan Park',
-    'Casey Robinson',
-    'Morgan Taylor',
-    'Riley Smith',
-    'Sam Johnson',
-    'Taylor Wilson',
-    'Chris Davis',
-  ]
-
-  for (let i = 0; i < 7; i++) {
-    const currentDate = addDays(startDate, i)
-
-    for (const teacher of teachers) {
-      const numEvents = Math.floor(Math.random() * 3) + 1
-
-      for (let j = 0; j < numEvents; j++) {
-        const hour =
-          SCHEDULE_START_HOUR +
-          Math.floor(Math.random() * (SCHEDULE_END_HOUR - SCHEDULE_START_HOUR))
-
-        const exists = events.find(
-          (e) =>
-            e.teacherId === teacher.id &&
-            isSameDay(e.start, currentDate) &&
-            e.start.getHours() === hour
-        )
-
-        if (exists) continue
-
-        const start = setHours(setMinutes(currentDate, 0), hour)
-        const end = setHours(setMinutes(currentDate, 0), hour + 1)
-        const status = statuses[Math.floor(Math.random() * statuses.length)]
-        const studentName =
-          status === 'booked' || status === 'trial'
-            ? students[Math.floor(Math.random() * students.length)]
-            : undefined
-
-        events.push({
-          id: `${teacher.id}-${currentDate.toISOString()}-${j}`,
-          teacherId: teacher.id,
-          title: `${teacher.subject} - ${
-            status === 'available'
-              ? 'Available'
-              : status === 'booked'
-              ? 'Booked'
-              : status === 'trial'
-              ? 'Trial'
-              : status === 'reschedule'
-              ? 'Reschedule'
-              : 'Locked'
-          }`,
-          start,
-          end,
-          status,
-          studentName,
-          subject: teacher.subject,
-          grade: teacher.grade,
-        })
-      }
-    }
-  }
-
-  return events
+  parent: string
+  grade: string
+  learningPlan: string
+  classesPerWeek: number
+  startDate: string
+  email?: string
 }
 
 const MetricCard = ({
@@ -522,10 +451,25 @@ const MonthlyView = ({
   )
 }
 
+function addHoursToDate(date: Date, hours: number): Date {
+  const result = new Date(date)
+  result.setHours(result.getHours() + hours)
+  return result
+}
+
+function startOfDay(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
 export default function SchedulePage() {
   const [studentsData, setStudentsData] = useState<StudentOption[]>([])
-const [selectedStudentId, setSelectedStudentId] = useState<string>('')
-const [customSubject, setCustomSubject] = useState('')
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('')
+  const [studentSearch, setStudentSearch] = useState('')
+  const [showStudentResults, setShowStudentResults] = useState(false)
+  const [customSubject, setCustomSubject] = useState('')
+
   const [teachersData, setTeachersData] = useState<Teacher[]>([])
   const [loadingTeachers, setLoadingTeachers] = useState(true)
   const [fetchError, setFetchError] = useState<string>('')
@@ -549,24 +493,7 @@ const [customSubject, setCustomSubject] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isSlotCreate, setIsSlotCreate] = useState(false)
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
-  const hasTimeConflict = (
-  teacherId: string,
-  date: string,
-  startTime: string,
-  endTime: string,
-  excludeEventId?: string | null
-) => {
-  return events.some((event) => {
-    if (event.teacherId !== teacherId) return false
-    if (format(event.start, 'yyyy-MM-dd') !== date) return false
-    if (excludeEventId && event.id === excludeEventId) return false
-
-    const existingStart = format(event.start, 'HH:mm')
-    const existingEnd = format(event.end, 'HH:mm')
-
-    return startTime < existingEnd && endTime > existingStart
-  })
-}
+  const [isCopyingWeek, setIsCopyingWeek] = useState(false)
 
   const [bookingForm, setBookingForm] = useState({
     studentName: '',
@@ -584,171 +511,233 @@ const [customSubject, setCustomSubject] = useState('')
     status: 'available' as ScheduleEvent['status'],
     studentName: '',
     studentEmail: '',
+    studentRecordId: '',
+    studentCode: '',
+    parentName: '',
+    learningPlan: '',
+    classesPerWeek: 0,
     notes: '',
   })
 
-  useEffect(() => {
-  const fetchStudents = async () => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, first_name, last_name, email, grade, role, department')
-      .eq('role', 'student')
+  const hasTimeConflict = (
+    teacherId: string,
+    date: string,
+    startTime: string,
+    endTime: string,
+    excludeEventId?: string | null,
+    sourceEvents?: ScheduleEvent[]
+  ) => {
+    const list = sourceEvents || events
 
-    console.log('STUDENTS DATA:', data)
-    console.log('STUDENTS ERROR:', error)
+    return list.some((event) => {
+      if (event.teacherId !== teacherId) return false
+      if (format(event.start, 'yyyy-MM-dd') !== date) return false
+      if (excludeEventId && event.id === excludeEventId) return false
 
-    if (error) return
+      const existingStart = format(event.start, 'HH:mm')
+      const existingEnd = format(event.end, 'HH:mm')
 
-    const mappedStudents: StudentOption[] = (data || []).map((student) => ({
-      id: student.id,
-      name:
-        `${student.first_name ?? ''} ${student.last_name ?? ''}`.trim() ||
-        'No Name',
-      email: student.email ?? '',
-      grade: student.grade ?? '',
-    }))
-
-    setStudentsData(mappedStudents)
+      return startTime < existingEnd && endTime > existingStart
+    })
   }
 
-  fetchStudents()
-}, [])
-
   useEffect(() => {
-  const fetchTeachers = async () => {
-    setLoadingTeachers(true)
-    setFetchError('')
+    const fetchStudents = async () => {
+      setFetchError('')
 
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, first_name, last_name, subject, grade, email, phone, role, department')
-      .eq('role', 'teacher')
-      .eq('department', 'teachers')
+      const { data, error } = await supabase
+        .from(CURRENT_STUDENTS_TABLE)
+        .select(`
+          id,
+          student_id,
+          student_name,
+          parent_name,
+          grade_year,
+          learning_plan,
+          classes_per_w,
+          start_date
+        `)
+        .order('student_name', { ascending: true })
 
-    console.log('TEACHERS DATA:', data)
-    console.log('TEACHERS ERROR:', error)
+      if (error) {
+        console.error('CURRENT STUDENTS ERROR:', error)
+        setStudentsData([])
+        return
+      }
 
-    if (error) {
-      setTeachersData([])
-      setFetchError(error.message || 'Failed to fetch teachers')
-    } else {
-      const mappedTeachers: Teacher[] = (data || []).map((teacher, index) => ({
-        id: teacher.id,
-        name: `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim() || 'No Name',
-        subject: teacher.subject ?? 'N/A',
-        grade: teacher.grade ?? 'N/A',
-        email: teacher.email ?? '',
-        phone: teacher.phone ?? '',
-        color: [
-          'bg-purple-500',
-          'bg-blue-500',
-          'bg-green-500',
-          'bg-amber-500',
-          'bg-cyan-500',
-          'bg-rose-500',
-          'bg-indigo-500',
-          'bg-pink-500',
-        ][index % 8],
-        availability: 0,
+      const mappedStudents: StudentOption[] = (data || []).map((student: any) => ({
+        id: String(student.id),
+        studentId: student.student_id ?? '',
+        name: student.student_name ?? '',
+        parent: student.parent_name ?? '',
+        grade: String(student.grade_year ?? ''),
+        learningPlan: student.learning_plan ?? '',
+        classesPerWeek: Number(student.classes_per_w ?? 0),
+        startDate: student.start_date ?? '',
+        email: '',
       }))
 
-      setTeachersData(mappedTeachers)
+      setStudentsData(mappedStudents)
     }
 
-    setLoadingTeachers(false)
-  }
-
-  fetchTeachers()
-}, [])
+    fetchStudents()
+  }, [])
 
   useEffect(() => {
-  const fetchScheduleClasses = async () => {
-    if (teachersData.length === 0) return
+    const fetchTeachers = async () => {
+      setLoadingTeachers(true)
+      setFetchError('')
 
-    setSelectedTeacherId((prev) => prev || teachersData[0].id)
+      const { data, error } = await supabase
+        .from('users')
+        .select(
+          'id, first_name, last_name, subject, grade, email, phone, role, department'
+        )
+        .eq('role', 'teacher')
+        .eq('department', 'teachers')
 
-    const { data, error } = await supabase
-      .from('schedule_classes')
-      .select('*')
-      .order('class_date', { ascending: true })
+      if (error) {
+        setTeachersData([])
+        setFetchError(error.message || 'Failed to fetch teachers')
+      } else {
+        const mappedTeachers: Teacher[] = (data || []).map((teacher, index) => ({
+          id: teacher.id,
+          name:
+            `${teacher.first_name ?? ''} ${teacher.last_name ?? ''}`.trim() ||
+            'No Name',
+          subject: teacher.subject ?? 'N/A',
+          grade: teacher.grade ?? 'N/A',
+          email: teacher.email ?? '',
+          phone: teacher.phone ?? '',
+          color: [
+            'bg-purple-500',
+            'bg-blue-500',
+            'bg-green-500',
+            'bg-amber-500',
+            'bg-cyan-500',
+            'bg-rose-500',
+            'bg-indigo-500',
+            'bg-pink-500',
+          ][index % 8],
+          availability: 0,
+        }))
 
-    console.log('SCHEDULE CLASSES DATA:', data)
-    console.log('SCHEDULE CLASSES ERROR:', error)
+        setTeachersData(mappedTeachers)
+      }
 
-    if (error) {
-      setFetchError(error.message || 'Failed to fetch schedule classes')
-      return
+      setLoadingTeachers(false)
     }
 
-    const mappedEvents: ScheduleEvent[] = (data || []).map((row) => ({
-      id: row.id,
-      teacherId: row.teacher_id,
-      title: `${row.subject || 'Class'} - ${
-        row.status.charAt(0).toUpperCase() + row.status.slice(1)
-      }`,
-      start: new Date(`${row.class_date}T${row.start_time}`),
-      end: new Date(`${row.class_date}T${row.end_time}`),
-      status: row.status,
-      studentName: row.student_name || undefined,
-      studentEmail: row.student_email || undefined,
-      subject: row.subject || 'N/A',
-      grade: row.grade || 'N/A',
-      notes: row.notes || undefined,
-    }))
+    fetchTeachers()
+  }, [])
 
-    setEvents(mappedEvents)
-  }
+  useEffect(() => {
+    const fetchScheduleClasses = async () => {
+      if (teachersData.length === 0) return
 
-  fetchScheduleClasses()
-}, [teachersData])
+      setSelectedTeacherId((prev) => prev || teachersData[0].id)
+
+      const { data, error } = await supabase
+        .from('schedule_classes')
+        .select('*')
+        .order('class_date', { ascending: true })
+
+      if (error) {
+        setFetchError(error.message || 'Failed to fetch schedule classes')
+        return
+      }
+
+      const mappedEvents: ScheduleEvent[] = (data || []).map((row) => ({
+        id: row.id,
+        teacherId: row.teacher_id,
+        title: `${row.subject || 'Class'} - ${
+          row.status.charAt(0).toUpperCase() + row.status.slice(1)
+        }`,
+        start: new Date(`${row.class_date}T${row.start_time}`),
+        end: new Date(`${row.class_date}T${row.end_time}`),
+        status: row.status,
+        studentName: row.student_name || undefined,
+        studentEmail: row.student_email || undefined,
+        studentRecordId: row.student_record_id || undefined,
+        studentCode: row.student_code || undefined,
+        parentName: row.parent_name || undefined,
+        learningPlan: row.learning_plan || undefined,
+        classesPerWeek: row.classes_per_week || undefined,
+        subject: row.subject || 'N/A',
+        grade: row.grade || 'N/A',
+        notes: row.notes || undefined,
+      }))
+
+      setEvents(mappedEvents)
+    }
+
+    fetchScheduleClasses()
+  }, [teachersData])
 
   useEffect(() => {
     if (isBookingModalOpen) {
       setBookingForm({ studentName: '', studentEmail: '', notes: '' })
     }
   }, [isBookingModalOpen])
-const subjectOptions = useMemo(() => {
-  const teacherSubjects = teachersData
-    .map((teacher) => teacher.subject)
-    .filter((subject) => subject && subject.trim() !== '' && subject !== 'N/A')
 
-  const currentCustom =
-    customSubject.trim() !== '' ? [customSubject.trim()] : []
+  const subjectOptions = useMemo(() => {
+    const teacherSubjects = teachersData
+      .map((teacher) => teacher.subject)
+      .filter((subject) => subject && subject.trim() !== '' && subject !== 'N/A')
 
-  return [...new Set([...teacherSubjects, ...currentCustom])].sort()
-}, [teachersData, customSubject])
+    const currentCustom =
+      customSubject.trim() !== '' ? [customSubject.trim()] : []
+
+    return [...new Set([...teacherSubjects, ...currentCustom])].sort()
+  }, [teachersData, customSubject])
 
   const filteredTeachers = useMemo(() => {
-  return teachersData.filter((teacher) => {
-    const matchesSearch =
-      searchTerm === '' ||
-      teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      teacher.subject.toLowerCase().includes(searchTerm.toLowerCase())
+    return teachersData.filter((teacher) => {
+      const matchesSearch =
+        searchTerm === '' ||
+        teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        teacher.subject.toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesSubject =
-      subjectFilter === '' || teacher.subject === subjectFilter
+      const matchesSubject =
+        subjectFilter === '' || teacher.subject === subjectFilter
 
-    return matchesSearch && matchesSubject
-  })
-}, [teachersData, searchTerm, subjectFilter])
+      return matchesSearch && matchesSubject
+    })
+  }, [teachersData, searchTerm, subjectFilter])
 
   const filteredEvents = useMemo(() => {
-  return events.filter((event) => {
-    const matchesStatus = statusFilter === '' || event.status === statusFilter
-    const matchesSubject =
-      subjectFilter === '' || event.subject === subjectFilter
-    const matchesGrade =
-      gradeFilter === '' || String(event.grade).trim() === String(gradeFilter).trim()
+    return events.filter((event) => {
+      const matchesStatus = statusFilter === '' || event.status === statusFilter
+      const matchesSubject =
+        subjectFilter === '' || event.subject === subjectFilter
+      const matchesGrade =
+        gradeFilter === '' ||
+        String(event.grade).trim() === String(gradeFilter).trim()
 
-    // Agar grade filter laga hua hai, to us grade ke saare events dikhao
-    // warna selected teacher ke events dikhao
-    const matchesTeacher =
-      gradeFilter !== '' ? true : event.teacherId === selectedTeacherId
+      const matchesTeacher =
+        gradeFilter !== '' ? true : event.teacherId === selectedTeacherId
 
-    return matchesTeacher && matchesStatus && matchesSubject && matchesGrade
-  })
-}, [events, selectedTeacherId, statusFilter, subjectFilter, gradeFilter])
+      return matchesTeacher && matchesStatus && matchesSubject && matchesGrade
+    })
+  }, [events, selectedTeacherId, statusFilter, subjectFilter, gradeFilter])
 
+  const searchedStudents = useMemo(() => {
+    const query = studentSearch.trim().toLowerCase()
+
+    return studentsData.filter((student) => {
+      const matchesSearch =
+        query === '' ||
+        student.name.toLowerCase().includes(query) ||
+        student.studentId.toLowerCase().includes(query) ||
+        student.parent.toLowerCase().includes(query)
+
+      const matchesGrade =
+        newEventData.grade === '' ||
+        String(student.grade).trim() === String(newEventData.grade).trim()
+
+      return matchesSearch && matchesGrade
+    })
+  }, [studentsData, studentSearch, newEventData.grade])
 
   const metrics = useMemo(() => {
     const activeTeachers = teachersData.length
@@ -769,60 +758,74 @@ const subjectOptions = useMemo(() => {
   }, [teachersData, events])
 
   const handleEventClick = (event: ScheduleEvent) => {
-  setEditingEventId(event.id)
+    setEditingEventId(event.id)
 
-  const matchedStudent = studentsData.find(
-    (student) =>
-      student.name === (event.studentName || '') ||
-      student.email === (event.studentEmail || '')
-  )
+    const matchedStudent = studentsData.find(
+      (student) =>
+        student.id === (event.studentRecordId || '') ||
+        student.name === (event.studentName || '')
+    )
 
-  setSelectedStudentId(matchedStudent?.id || '')
-  setCustomSubject(event.subject || '')
+    setSelectedStudentId(matchedStudent?.id || '')
+    setStudentSearch(matchedStudent?.name || event.studentName || '')
+    setCustomSubject(event.subject || '')
 
-  setNewEventData({
-    teacherId: event.teacherId,
-    date: format(event.start, 'yyyy-MM-dd'),
-    startTime: format(event.start, 'HH:mm'),
-    endTime: format(event.end, 'HH:mm'),
-    subject: event.subject,
-    grade: event.grade,
-    status: event.status,
-    studentName: event.studentName || '',
-    studentEmail: event.studentEmail || '',
-    notes: event.notes || '',
-  })
+    setNewEventData({
+      teacherId: event.teacherId,
+      date: format(event.start, 'yyyy-MM-dd'),
+      startTime: format(event.start, 'HH:mm'),
+      endTime: format(event.end, 'HH:mm'),
+      subject: event.subject,
+      grade: event.grade,
+      status: event.status,
+      studentName: event.studentName || '',
+      studentEmail: event.studentEmail || '',
+      studentRecordId: matchedStudent?.id || event.studentRecordId || '',
+      studentCode: matchedStudent?.studentId || event.studentCode || '',
+      parentName: matchedStudent?.parent || event.parentName || '',
+      learningPlan: matchedStudent?.learningPlan || event.learningPlan || '',
+      classesPerWeek:
+        matchedStudent?.classesPerWeek || event.classesPerWeek || 0,
+      notes: event.notes || '',
+    })
 
-  setIsSlotCreate(false)
-  setIsCreateModalOpen(true)
-}
+    setIsSlotCreate(false)
+    setIsCreateModalOpen(true)
+  }
 
   const handleSlotClick = (day: Date, hour: number) => {
-  const dateStr = format(day, 'yyyy-MM-dd')
-  const startTimeStr = `${hour.toString().padStart(2, '0')}:00`
-  const endTimeStr = `${(hour + 1).toString().padStart(2, '0')}:00`
-  const teacher = teachersData.find((t) => t.id === selectedTeacherId)
+    const dateStr = format(day, 'yyyy-MM-dd')
+    const startTimeStr = `${hour.toString().padStart(2, '0')}:00`
+    const endTimeStr = `${(hour + 1).toString().padStart(2, '0')}:00`
+    const teacher = teachersData.find((t) => t.id === selectedTeacherId)
 
-  setEditingEventId(null)
+    setEditingEventId(null)
 
-  setNewEventData({
-    teacherId: selectedTeacherId,
-    date: dateStr,
-    startTime: startTimeStr,
-    endTime: endTimeStr,
-    subject: teacher?.subject || '',
-    grade: teacher?.grade || '',
-    status: 'available',
-    studentName: '',
-    studentEmail: '',
-    notes: '',
-  })
+    setNewEventData({
+      teacherId: selectedTeacherId,
+      date: dateStr,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
+      subject: teacher?.subject || '',
+      grade: teacher?.grade || '',
+      status: 'available',
+      studentName: '',
+      studentEmail: '',
+      studentRecordId: '',
+      studentCode: '',
+      parentName: '',
+      learningPlan: '',
+      classesPerWeek: 0,
+      notes: '',
+    })
 
-  setIsSlotCreate(true)
-  setIsCreateModalOpen(true)
-setSelectedStudentId('')
-setCustomSubject('')
-}
+    setIsSlotCreate(true)
+    setIsCreateModalOpen(true)
+    setSelectedStudentId('')
+    setStudentSearch('')
+    setShowStudentResults(false)
+    setCustomSubject('')
+  }
 
   const handleDaySelect = (day: Date) => {
     setCurrentDate(day)
@@ -845,182 +848,327 @@ setCustomSubject('')
 
   const handleCreateSchedule = async () => {
     if (
-  (newEventData.status === 'booked' || newEventData.status === 'reschedule') &&
-  !selectedStudentId
-) {
-  setFetchError('Please select a student for booked/reschedule class.')
-  return
-}
-
-if (
-  newEventData.status === 'trial' &&
-  (!newEventData.studentName || !newEventData.studentEmail)
-) {
-  setFetchError('Please enter student name and email for trial class.')
-  return
-}
-  const conflictExists = hasTimeConflict(
-    newEventData.teacherId,
-    newEventData.date,
-    newEventData.startTime,
-    newEventData.endTime,
-    editingEventId
-  )
-
-  if (conflictExists) {
-    setFetchError('This teacher already has another class at this time.')
-    return
-  }
-
-  if (editingEventId) {
-    const { data, error } = await supabase
-      .from('schedule_classes')
-      .update({
-        teacher_id: newEventData.teacherId,
-        class_date: newEventData.date,
-        start_time: newEventData.startTime,
-        end_time: newEventData.endTime,
-        subject: newEventData.subject,
-        grade: newEventData.grade,
-        status: newEventData.status,
-        student_name: newEventData.studentName || null,
-        student_email: newEventData.studentEmail || null,
-        notes: newEventData.notes || null,
-      })
-      .eq('id', editingEventId)
-      .select()
-
-    console.log('UPDATE CLASS DATA:', data)
-    console.log('UPDATE CLASS ERROR:', error)
-
-    if (error) {
-      setFetchError(error.message || 'Failed to update class')
+      (newEventData.status === 'booked' ||
+        newEventData.status === 'reschedule') &&
+      !newEventData.studentRecordId
+    ) {
+      setFetchError('Please select a student from current students list.')
       return
     }
 
-    if (data && data.length > 0) {
-      const row = data[0]
-
-      const updatedEvent: ScheduleEvent = {
-        id: row.id,
-        teacherId: row.teacher_id,
-        title: `${row.subject} - ${
-          row.status.charAt(0).toUpperCase() + row.status.slice(1)
-        }`,
-        start: new Date(`${row.class_date}T${row.start_time}`),
-        end: new Date(`${row.class_date}T${row.end_time}`),
-        status: row.status,
-        studentName: row.student_name || undefined,
-        studentEmail: row.student_email || undefined,
-        subject: row.subject || 'N/A',
-        grade: row.grade || 'N/A',
-        notes: row.notes || undefined,
-      }
-
-      setEvents((prev) =>
-        prev.map((event) => (event.id === editingEventId ? updatedEvent : event))
-      )
-    }
-  } else {
-    const { data, error } = await supabase
-      .from('schedule_classes')
-      .insert([
-        {
-          teacher_id: newEventData.teacherId,
-          class_date: newEventData.date,
-          start_time: newEventData.startTime,
-          end_time: newEventData.endTime,
-          subject: newEventData.subject,
-          grade: newEventData.grade,
-          status: newEventData.status,
-          student_name: newEventData.studentName || null,
-          student_email: newEventData.studentEmail || null,
-          notes: newEventData.notes || null,
-        },
-      ])
-      .select()
-
-    console.log('INSERT CLASS DATA:', data)
-    console.log('INSERT CLASS ERROR:', error)
-
-    if (error) {
-      setFetchError(error.message || 'Failed to save class')
+    if (
+      newEventData.status === 'trial' &&
+      (!newEventData.studentName || !newEventData.studentEmail)
+    ) {
+      setFetchError('Please enter student name and email for trial class.')
       return
     }
 
-    if (data && data.length > 0) {
-      const row = data[0]
+    const conflictExists = hasTimeConflict(
+      newEventData.teacherId,
+      newEventData.date,
+      newEventData.startTime,
+      newEventData.endTime,
+      editingEventId
+    )
 
-      const newEvent: ScheduleEvent = {
-        id: row.id,
-        teacherId: row.teacher_id,
-        title: `${row.subject} - ${
-          row.status.charAt(0).toUpperCase() + row.status.slice(1)
-        }`,
-        start: new Date(`${row.class_date}T${row.start_time}`),
-        end: new Date(`${row.class_date}T${row.end_time}`),
-        status: row.status,
-        studentName: row.student_name || undefined,
-        studentEmail: row.student_email || undefined,
-        subject: row.subject || 'N/A',
-        grade: row.grade || 'N/A',
-        notes: row.notes || undefined,
+    if (conflictExists) {
+      setFetchError('This teacher already has another class at this time.')
+      return
+    }
+
+    const payload = {
+      teacher_id: newEventData.teacherId,
+      class_date: newEventData.date,
+      start_time: newEventData.startTime,
+      end_time: newEventData.endTime,
+      subject: newEventData.subject,
+      grade: newEventData.grade,
+      status: newEventData.status,
+      student_name: newEventData.studentName || null,
+      student_email: newEventData.studentEmail || null,
+      student_record_id: newEventData.studentRecordId || null,
+      student_code: newEventData.studentCode || null,
+      parent_name: newEventData.parentName || null,
+      learning_plan: newEventData.learningPlan || null,
+      classes_per_week: newEventData.classesPerWeek || null,
+      notes: newEventData.notes || null,
+    }
+
+    if (editingEventId) {
+      const { data, error } = await supabase
+        .from('schedule_classes')
+        .update(payload)
+        .eq('id', editingEventId)
+        .select()
+
+      if (error) {
+        setFetchError(error.message || 'Failed to update class')
+        return
       }
 
-      setEvents((prev) => [...prev, newEvent])
+      if (data && data.length > 0) {
+        const row = data[0]
+
+        const updatedEvent: ScheduleEvent = {
+          id: row.id,
+          teacherId: row.teacher_id,
+          title: `${row.subject} - ${
+            row.status.charAt(0).toUpperCase() + row.status.slice(1)
+          }`,
+          start: new Date(`${row.class_date}T${row.start_time}`),
+          end: new Date(`${row.class_date}T${row.end_time}`),
+          status: row.status,
+          studentName: row.student_name || undefined,
+          studentEmail: row.student_email || undefined,
+          studentRecordId: row.student_record_id || undefined,
+          studentCode: row.student_code || undefined,
+          parentName: row.parent_name || undefined,
+          learningPlan: row.learning_plan || undefined,
+          classesPerWeek: row.classes_per_week || undefined,
+          subject: row.subject || 'N/A',
+          grade: row.grade || 'N/A',
+          notes: row.notes || undefined,
+        }
+
+        setEvents((prev) =>
+          prev.map((event) => (event.id === editingEventId ? updatedEvent : event))
+        )
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('schedule_classes')
+        .insert([payload])
+        .select()
+
+      if (error) {
+        setFetchError(error.message || 'Failed to save class')
+        return
+      }
+
+      if (data && data.length > 0) {
+        const row = data[0]
+
+        const newEvent: ScheduleEvent = {
+          id: row.id,
+          teacherId: row.teacher_id,
+          title: `${row.subject} - ${
+            row.status.charAt(0).toUpperCase() + row.status.slice(1)
+          }`,
+          start: new Date(`${row.class_date}T${row.start_time}`),
+          end: new Date(`${row.class_date}T${row.end_time}`),
+          status: row.status,
+          studentName: row.student_name || undefined,
+          studentEmail: row.student_email || undefined,
+          studentRecordId: row.student_record_id || undefined,
+          studentCode: row.student_code || undefined,
+          parentName: row.parent_name || undefined,
+          learningPlan: row.learning_plan || undefined,
+          classesPerWeek: row.classes_per_week || undefined,
+          subject: row.subject || 'N/A',
+          grade: row.grade || 'N/A',
+          notes: row.notes || undefined,
+        }
+
+        setEvents((prev) => [...prev, newEvent])
+      }
     }
+
+    setFetchError('')
+    setEditingEventId(null)
+    setIsCreateModalOpen(false)
+    setIsSlotCreate(false)
+    setSelectedStudentId('')
+    setStudentSearch('')
+    setShowStudentResults(false)
+
+    setNewEventData({
+      teacherId: '',
+      date: format(new Date(), 'yyyy-MM-dd'),
+      startTime: '09:00',
+      endTime: '10:00',
+      subject: '',
+      grade: '',
+      status: 'available',
+      studentName: '',
+      studentEmail: '',
+      studentRecordId: '',
+      studentCode: '',
+      parentName: '',
+      learningPlan: '',
+      classesPerWeek: 0,
+      notes: '',
+    })
   }
-
-  setFetchError('')
-  setEditingEventId(null)
-  setIsCreateModalOpen(false)
-  setIsSlotCreate(false)
-
-  setNewEventData({
-    teacherId: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
-    startTime: '09:00',
-    endTime: '10:00',
-    subject: '',
-    grade: '',
-    status: 'available',
-    studentName: '',
-    studentEmail: '',
-    notes: '',
-  })
-}
 
   const handleOpenCreateFromHeader = () => {
-  setEditingEventId(null)
+    setEditingEventId(null)
 
-  setNewEventData({
-    teacherId: selectedTeacherId,
-    date: format(currentDate, 'yyyy-MM-dd'),
-    startTime: '09:00',
-    endTime: '10:00',
-    subject:
-      teachersData.find((t) => t.id === selectedTeacherId)?.subject || '',
-    grade: teachersData.find((t) => t.id === selectedTeacherId)?.grade || '',
-    status: 'available',
-    studentName: '',
-    studentEmail: '',
-    notes: '',
-  })
+    setNewEventData({
+      teacherId: selectedTeacherId,
+      date: format(currentDate, 'yyyy-MM-dd'),
+      startTime: '09:00',
+      endTime: '10:00',
+      subject:
+        teachersData.find((t) => t.id === selectedTeacherId)?.subject || '',
+      grade: teachersData.find((t) => t.id === selectedTeacherId)?.grade || '',
+      status: 'available',
+      studentName: '',
+      studentEmail: '',
+      studentRecordId: '',
+      studentCode: '',
+      parentName: '',
+      learningPlan: '',
+      classesPerWeek: 0,
+      notes: '',
+    })
 
-  setIsSlotCreate(false)
-  setIsCreateModalOpen(true)
-  setSelectedStudentId('')
-setCustomSubject('')
-}
-const filteredStudents = useMemo(() => {
-  return studentsData.filter((student) => {
-    const matchesGrade =
-      newEventData.grade === '' ||
-      String(student.grade).trim() === String(newEventData.grade).trim()
+    setIsSlotCreate(false)
+    setIsCreateModalOpen(true)
+    setSelectedStudentId('')
+    setStudentSearch('')
+    setShowStudentResults(false)
+    setCustomSubject('')
+  }
 
-    return matchesGrade
-  })
-}, [studentsData, newEventData.grade])
+  const handleCopyWeekSchedule = async () => {
+    if (!selectedTeacherId) {
+      setFetchError('Please select a teacher first.')
+      return
+    }
+
+    setIsCopyingWeek(true)
+    setFetchError('')
+
+    try {
+      const currentWeekStart = startOfWeek(currentDate, { weekStartsOn: 1 })
+      const nextWeekStart = addWeeks(currentWeekStart, 1)
+
+      const selectedTeacherWeekEvents = events.filter((event) => {
+        const eventWeekStart = startOfWeek(event.start, { weekStartsOn: 1 })
+        return (
+          event.teacherId === selectedTeacherId &&
+          eventWeekStart.getTime() === currentWeekStart.getTime()
+        )
+      })
+
+      if (selectedTeacherWeekEvents.length === 0) {
+        setFetchError('No classes found in this week for selected teacher.')
+        setIsCopyingWeek(false)
+        return
+      }
+
+      const eventsToInsert = []
+      const tempEvents = [...events]
+
+      for (const event of selectedTeacherWeekEvents) {
+        const dayOffset =
+          Math.floor(
+            (startOfDay(event.start).getTime() - startOfDay(currentWeekStart).getTime()) /
+              (1000 * 60 * 60 * 24)
+          ) || 0
+
+        const newDate = addDays(nextWeekStart, dayOffset)
+        const newDateStr = format(newDate, 'yyyy-MM-dd')
+        const newStartTime = format(event.start, 'HH:mm')
+        const newEndTime = format(event.end, 'HH:mm')
+
+        const conflict = hasTimeConflict(
+          event.teacherId,
+          newDateStr,
+          newStartTime,
+          newEndTime,
+          null,
+          tempEvents
+        )
+
+        if (conflict) continue
+
+        const insertRow = {
+          teacher_id: event.teacherId,
+          class_date: newDateStr,
+          start_time: newStartTime,
+          end_time: newEndTime,
+          subject: event.subject,
+          grade: event.grade,
+          status: event.status,
+          student_name: event.studentName || null,
+          student_email: event.studentEmail || null,
+          student_record_id: event.studentRecordId || null,
+          student_code: event.studentCode || null,
+          parent_name: event.parentName || null,
+          learning_plan: event.learningPlan || null,
+          classes_per_week: event.classesPerWeek || null,
+          notes: event.notes || null,
+        }
+
+        eventsToInsert.push(insertRow)
+
+        tempEvents.push({
+          id: `temp-${Math.random()}`,
+          teacherId: event.teacherId,
+          title: `${event.subject} - ${
+            event.status.charAt(0).toUpperCase() + event.status.slice(1)
+          }`,
+          start: new Date(`${newDateStr}T${newStartTime}`),
+          end: new Date(`${newDateStr}T${newEndTime}`),
+          status: event.status,
+          studentName: event.studentName,
+          studentEmail: event.studentEmail,
+          studentRecordId: event.studentRecordId,
+          studentCode: event.studentCode,
+          parentName: event.parentName,
+          learningPlan: event.learningPlan,
+          classesPerWeek: event.classesPerWeek,
+          subject: event.subject,
+          grade: event.grade,
+          notes: event.notes,
+        })
+      }
+
+      if (eventsToInsert.length === 0) {
+        setFetchError('Next week already has same/conflicting slots for this teacher.')
+        setIsCopyingWeek(false)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('schedule_classes')
+        .insert(eventsToInsert)
+        .select()
+
+      if (error) {
+        setFetchError(error.message || 'Failed to copy next week schedule.')
+        setIsCopyingWeek(false)
+        return
+      }
+
+      const copiedEvents: ScheduleEvent[] = (data || []).map((row) => ({
+        id: row.id,
+        teacherId: row.teacher_id,
+        title: `${row.subject || 'Class'} - ${
+          row.status.charAt(0).toUpperCase() + row.status.slice(1)
+        }`,
+        start: new Date(`${row.class_date}T${row.start_time}`),
+        end: new Date(`${row.class_date}T${row.end_time}`),
+        status: row.status,
+        studentName: row.student_name || undefined,
+        studentEmail: row.student_email || undefined,
+        studentRecordId: row.student_record_id || undefined,
+        studentCode: row.student_code || undefined,
+        parentName: row.parent_name || undefined,
+        learningPlan: row.learning_plan || undefined,
+        classesPerWeek: row.classes_per_week || undefined,
+        subject: row.subject || 'N/A',
+        grade: row.grade || 'N/A',
+        notes: row.notes || undefined,
+      }))
+
+      setEvents((prev) => [...prev, ...copiedEvents])
+    } finally {
+      setIsCopyingWeek(false)
+    }
+  }
 
   const navigatePrevious = () => {
     if (viewMode === 'weekly') setCurrentDate(subWeeks(currentDate, 1))
@@ -1033,8 +1181,6 @@ const filteredStudents = useMemo(() => {
     else if (viewMode === 'monthly') setCurrentDate(addMonths(currentDate, 1))
     else setCurrentDate(addDays(currentDate, 1))
   }
-
-  const navigateToday = () => setCurrentDate(new Date())
 
   const slotInfo = useMemo(() => {
     if (!isSlotCreate || !newEventData.date) return null
@@ -1079,10 +1225,23 @@ const filteredStudents = useMemo(() => {
               Manage schedules, track availability, and book sessions
             </p>
           </div>
-          <Button onClick={handleOpenCreateFromHeader} className="gap-2">
-            <Plus className="h-4 w-4" />
-            + Schedule
-          </Button>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={handleCopyWeekSchedule}
+              disabled={!selectedTeacherId || isCopyingWeek}
+              className="gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              {isCopyingWeek ? 'Copying...' : 'Copy to Next Week'}
+            </Button>
+
+            <Button onClick={handleOpenCreateFromHeader} className="gap-2">
+              <Plus className="h-4 w-4" />
+              + Schedule
+            </Button>
+          </div>
         </div>
 
         {fetchError && (
@@ -1201,9 +1360,7 @@ const filteredStudents = useMemo(() => {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  {/* <Button variant="outline" size="sm" onClick={navigateToday}>
-                    Today
-                  </Button> */}
+
                   <Button
                     variant="outline"
                     size="icon"
@@ -1212,6 +1369,7 @@ const filteredStudents = useMemo(() => {
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
+
                   <span className="text-lg font-semibold">
                     {viewMode === 'monthly'
                       ? format(currentDate, 'MMMM yyyy')
@@ -1233,48 +1391,48 @@ const filteredStudents = useMemo(() => {
 
               <div className="flex flex-wrap gap-2 mt-4">
                 <Select
-  value={subjectFilter || 'all'}
-  onValueChange={(v) => setSubjectFilter(v === 'all' ? '' : v)}
->
-  <SelectTrigger className="w-[130px]">
-    <SelectValue placeholder="All Subjects" />
-  </SelectTrigger>
-  <SelectContent>
-    <SelectItem value="all">All Subjects</SelectItem>
-    {subjectOptions.map((subject) => (
-      <SelectItem key={subject} value={subject}>
-        {subject}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
+                  value={subjectFilter || 'all'}
+                  onValueChange={(v) => setSubjectFilter(v === 'all' ? '' : v)}
+                >
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue placeholder="All Subjects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Subjects</SelectItem>
+                    {subjectOptions.map((subject) => (
+                      <SelectItem key={subject} value={subject}>
+                        {subject}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
                 <Select
-  value={gradeFilter}
-  onValueChange={(v) => setGradeFilter(v === 'all' ? '' : v)}
->
-  <SelectTrigger className="w-[130px]">
-    <SelectValue placeholder="All Grades" />
-  </SelectTrigger>
-  <SelectContent>
-    <SelectItem value="all">All Grades</SelectItem>
-    <SelectItem value="1">Grade 1</SelectItem>
-    <SelectItem value="2">Grade 2</SelectItem>
-    <SelectItem value="3">Grade 3</SelectItem>
-    <SelectItem value="4">Grade 4</SelectItem>
-    <SelectItem value="5">Grade 5</SelectItem>
-    <SelectItem value="6">Grade 6</SelectItem>
-    <SelectItem value="7">Grade 7</SelectItem>
-    <SelectItem value="8">Grade 8</SelectItem>
-    <SelectItem value="9">Grade 9</SelectItem>
-    <SelectItem value="10">Grade 10</SelectItem>
-    <SelectItem value="11">Grade 11</SelectItem>
-    <SelectItem value="12">Grade 12</SelectItem>
-  </SelectContent>
-</Select>
+                  value={gradeFilter || 'all'}
+                  onValueChange={(v) => setGradeFilter(v === 'all' ? '' : v)}
+                >
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue placeholder="All Grades" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Grades</SelectItem>
+                    <SelectItem value="1">Grade 1</SelectItem>
+                    <SelectItem value="2">Grade 2</SelectItem>
+                    <SelectItem value="3">Grade 3</SelectItem>
+                    <SelectItem value="4">Grade 4</SelectItem>
+                    <SelectItem value="5">Grade 5</SelectItem>
+                    <SelectItem value="6">Grade 6</SelectItem>
+                    <SelectItem value="7">Grade 7</SelectItem>
+                    <SelectItem value="8">Grade 8</SelectItem>
+                    <SelectItem value="9">Grade 9</SelectItem>
+                    <SelectItem value="10">Grade 10</SelectItem>
+                    <SelectItem value="11">Grade 11</SelectItem>
+                    <SelectItem value="12">Grade 12</SelectItem>
+                  </SelectContent>
+                </Select>
 
                 <Select
-                  value={statusFilter}
+                  value={statusFilter || 'all'}
                   onValueChange={(v) => setStatusFilter(v === 'all' ? '' : v)}
                 >
                   <SelectTrigger className="w-[130px]">
@@ -1326,112 +1484,20 @@ const filteredStudents = useMemo(() => {
         </div>
 
         <Dialog
-          open={isBookingModalOpen}
-          onOpenChange={setIsBookingModalOpen}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Book Tutoring Session</DialogTitle>
-              <DialogDescription>
-                Fill in student details to confirm this booking.
-              </DialogDescription>
-            </DialogHeader>
-
-            {selectedEvent && (
-              <div className="space-y-4">
-                <div className="p-4 rounded-lg bg-muted">
-                  <p className="text-sm font-medium">
-                    {selectedEvent.subject} - Grade {selectedEvent.grade}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {format(selectedEvent.start, 'EEEE, MMMM d, yyyy • h:mm a')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Teacher:{' '}
-                    {teachersData.find((t) => t.id === selectedEvent.teacherId)
-                      ?.name}
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="booking-studentName">Student Name *</Label>
-                  <Input
-                    id="booking-studentName"
-                    placeholder="Enter student name"
-                    value={bookingForm.studentName}
-                    onChange={(e) =>
-                      setBookingForm((prev) => ({
-                        ...prev,
-                        studentName: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="booking-studentEmail">Student Email *</Label>
-                  <Input
-                    id="booking-studentEmail"
-                    type="email"
-                    placeholder="student@example.com"
-                    value={bookingForm.studentEmail}
-                    onChange={(e) =>
-                      setBookingForm((prev) => ({
-                        ...prev,
-                        studentEmail: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="booking-notes">Notes (Optional)</Label>
-                  <Textarea
-                    id="booking-notes"
-                    placeholder="Any special requests or topics to cover..."
-                    value={bookingForm.notes}
-                    onChange={(e) =>
-                      setBookingForm((prev) => ({
-                        ...prev,
-                        notes: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setIsBookingModalOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={handleBooking}
-                    disabled={
-                      !bookingForm.studentName || !bookingForm.studentEmail
-                    }
-                  >
-                    Confirm Booking
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        <Dialog
           open={isCreateModalOpen}
           onOpenChange={(open) => {
             setIsCreateModalOpen(open)
-            if (!open) setIsSlotCreate(false)
+            if (!open) {
+              setIsSlotCreate(false)
+              setShowStudentResults(false)
+            }
           }}
         >
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>{editingEventId ? 'Edit Class' : 'Schedule a Class'}</DialogTitle>
+              <DialogTitle>
+                {editingEventId ? 'Edit Class' : 'Schedule a Class'}
+              </DialogTitle>
               <DialogDescription>
                 {isSlotCreate
                   ? 'Selected slot is pre-filled. Complete the details below.'
@@ -1539,49 +1605,80 @@ const filteredStudents = useMemo(() => {
               </div>
 
               <div className="space-y-2">
-  <Label>Subject *</Label>
-  <Select
-    value={newEventData.subject || 'custom'}
-    onValueChange={(value) => {
-      if (value === 'custom') {
-        setNewEventData({
-          ...newEventData,
-          subject: customSubject,
-        })
-      } else {
-        setCustomSubject(value)
-        setNewEventData({
-          ...newEventData,
-          subject: value,
-        })
-      }
-    }}
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="Select subject" />
-    </SelectTrigger>
-    <SelectContent>
-      {subjectOptions.map((subject) => (
-        <SelectItem key={subject} value={subject}>
-          {subject}
-        </SelectItem>
-      ))}
-      <SelectItem value="custom">Custom Subject</SelectItem>
-    </SelectContent>
-  </Select>
+                <Label>Subject *</Label>
+                <Select
+                  value={newEventData.subject || 'custom'}
+                  onValueChange={(value) => {
+                    if (value === 'custom') {
+                      setNewEventData({
+                        ...newEventData,
+                        subject: customSubject,
+                      })
+                    } else {
+                      setCustomSubject(value)
+                      setNewEventData({
+                        ...newEventData,
+                        subject: value,
+                      })
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select subject" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjectOptions.map((subject) => (
+                      <SelectItem key={subject} value={subject}>
+                        {subject}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom Subject</SelectItem>
+                  </SelectContent>
+                </Select>
 
-  <Input
-    placeholder="Or type custom subject"
-    value={customSubject}
-    onChange={(e) => {
-      setCustomSubject(e.target.value)
-      setNewEventData({
-        ...newEventData,
-        subject: e.target.value,
-      })
-    }}
-  />
-</div>
+                <Input
+                  placeholder="Or type custom subject"
+                  value={customSubject}
+                  onChange={(e) => {
+                    setCustomSubject(e.target.value)
+                    setNewEventData({
+                      ...newEventData,
+                      subject: e.target.value,
+                    })
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Grade *</Label>
+                <Select
+                  value={newEventData.grade}
+                  onValueChange={(v) =>
+                    setNewEventData({
+                      ...newEventData,
+                      grade: v,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select grade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Grade 1</SelectItem>
+                    <SelectItem value="2">Grade 2</SelectItem>
+                    <SelectItem value="3">Grade 3</SelectItem>
+                    <SelectItem value="4">Grade 4</SelectItem>
+                    <SelectItem value="5">Grade 5</SelectItem>
+                    <SelectItem value="6">Grade 6</SelectItem>
+                    <SelectItem value="7">Grade 7</SelectItem>
+                    <SelectItem value="8">Grade 8</SelectItem>
+                    <SelectItem value="9">Grade 9</SelectItem>
+                    <SelectItem value="10">Grade 10</SelectItem>
+                    <SelectItem value="11">Grade 11</SelectItem>
+                    <SelectItem value="12">Grade 12</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div className="space-y-2">
                 <Label>Status</Label>
@@ -1608,84 +1705,127 @@ const filteredStudents = useMemo(() => {
               </div>
 
               {(newEventData.status === 'booked' ||
-  newEventData.status === 'reschedule') && (
-  <div className="space-y-4">
-    <div className="space-y-2">
-      <Label>Select Student *</Label>
-      <Select
-        value={selectedStudentId}
-        onValueChange={(value) => {
-          setSelectedStudentId(value)
+                newEventData.status === 'reschedule') && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Search Student *</Label>
+                    <Input
+                      placeholder="Type student name, ID, or parent name"
+                      value={studentSearch}
+                      onChange={(e) => {
+                        setStudentSearch(e.target.value)
+                        setShowStudentResults(true)
+                      }}
+                      onFocus={() => setShowStudentResults(true)}
+                    />
+                  </div>
 
-          const selectedStudent = studentsData.find(
-            (student) => student.id === value
-          )
+                  {showStudentResults && studentSearch.trim() !== '' && (
+                    <div className="border rounded-lg max-h-48 overflow-y-auto bg-background">
+                      {searchedStudents.length > 0 ? (
+                        searchedStudents.map((student) => (
+                          <button
+                            key={student.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 hover:bg-muted border-b last:border-b-0"
+                            onClick={() => {
+                              setSelectedStudentId(student.id)
+                              setStudentSearch(student.name)
+                              setShowStudentResults(false)
 
-          setNewEventData({
-            ...newEventData,
-            studentName: selectedStudent?.name || '',
-            studentEmail: selectedStudent?.email || '',
-            grade: selectedStudent?.grade || newEventData.grade,
-          })
-        }}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Select existing student" />
-        </SelectTrigger>
-        <SelectContent>
-          {filteredStudents.map((student) => (
-            <SelectItem key={student.id} value={student.id}>
-              {student.name} {student.grade ? `- Grade ${student.grade}` : ''}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+                              setNewEventData({
+                                ...newEventData,
+                                studentName: student.name,
+                                studentEmail: '',
+                                studentRecordId: student.id,
+                                studentCode: student.studentId,
+                                parentName: student.parent,
+                                grade: student.grade || newEventData.grade,
+                                learningPlan: student.learningPlan,
+                                classesPerWeek: student.classesPerWeek,
+                              })
+                            }}
+                          >
+                            <div className="font-medium">{student.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {student.studentId} • Parent: {student.parent} • Grade {student.grade}
+                            </div>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No student found
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-    <div className="space-y-2">
-      <Label>Student Name</Label>
-      <Input value={newEventData.studentName} readOnly />
-    </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Student Name</Label>
+                      <Input value={newEventData.studentName} readOnly />
+                    </div>
 
-    <div className="space-y-2">
-      <Label>Student Email</Label>
-      <Input value={newEventData.studentEmail} readOnly />
-    </div>
-  </div>
-)}
+                    <div className="space-y-2">
+                      <Label>Student ID</Label>
+                      <Input value={newEventData.studentCode} readOnly />
+                    </div>
+                  </div>
 
-{newEventData.status === 'trial' && (
-  <>
-    <div className="space-y-2">
-      <Label>Student Name *</Label>
-      <Input
-        placeholder="Enter student name"
-        value={newEventData.studentName}
-        onChange={(e) =>
-          setNewEventData({
-            ...newEventData,
-            studentName: e.target.value,
-          })
-        }
-      />
-    </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Parent</Label>
+                      <Input value={newEventData.parentName} readOnly />
+                    </div>
 
-    <div className="space-y-2">
-      <Label>Student Email *</Label>
-      <Input
-        type="email"
-        placeholder="student@example.com"
-        value={newEventData.studentEmail}
-        onChange={(e) =>
-          setNewEventData({
-            ...newEventData,
-            studentEmail: e.target.value,
-          })
-        }
-      />
-    </div>
-  </>
-)}
+                    <div className="space-y-2">
+                      <Label>Learning Plan</Label>
+                      <Input value={newEventData.learningPlan} readOnly />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Classes / Week</Label>
+                    <Input
+                      value={String(newEventData.classesPerWeek || '')}
+                      readOnly
+                    />
+                  </div>
+                </div>
+              )}
+
+              {newEventData.status === 'trial' && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Student Name *</Label>
+                    <Input
+                      placeholder="Enter student name"
+                      value={newEventData.studentName}
+                      onChange={(e) =>
+                        setNewEventData({
+                          ...newEventData,
+                          studentName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Student Email *</Label>
+                    <Input
+                      type="email"
+                      placeholder="student@example.com"
+                      value={newEventData.studentEmail}
+                      onChange={(e) =>
+                        setNewEventData({
+                          ...newEventData,
+                          studentEmail: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="space-y-2">
                 <Label>Notes (Optional)</Label>
@@ -1708,6 +1848,7 @@ const filteredStudents = useMemo(() => {
                   onClick={() => {
                     setIsCreateModalOpen(false)
                     setIsSlotCreate(false)
+                    setShowStudentResults(false)
                   }}
                 >
                   Cancel
@@ -1722,7 +1863,12 @@ const filteredStudents = useMemo(() => {
                     !newEventData.date
                   }
                 >
-{editingEventId ? 'Update Class' : isSlotCreate ? 'Schedule Class' : 'Create Schedule'}         </Button>
+                  {editingEventId
+                    ? 'Update Class'
+                    : isSlotCreate
+                    ? 'Schedule Class'
+                    : 'Create Schedule'}
+                </Button>
               </div>
             </div>
           </DialogContent>
@@ -1730,10 +1876,4 @@ const filteredStudents = useMemo(() => {
       </div>
     </div>
   )
-}
-
-function addHoursToDate(date: Date, hours: number): Date {
-  const result = new Date(date)
-  result.setHours(result.getHours() + hours)
-  return result
 }
