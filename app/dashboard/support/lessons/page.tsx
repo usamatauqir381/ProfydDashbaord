@@ -1,860 +1,1934 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { ClassRecord } from "@/lib/types";
-import { C_KEYS, C_LABELS, X_KEYS, X_LABELS, LABEL_MAP, ALL_KEYS, KEY_MAP } from "@/lib/data";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase/client";
+import { ALL_KEYS, LABEL_MAP } from "@/lib/data";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area,
-} from "recharts";
-import {
-  CheckCircle2, XCircle, CalendarDays, TrendingUp, Download,
-  FileSpreadsheet, CloudUpload, CloudDownload, Save, RotateCcw,
-  Pencil, AlertCircle, Upload, ChevronLeft, ChevronRight, Database,
+  AlertCircle,
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  CloudUpload,
+  Download,
+  FileSpreadsheet,
+  Filter,
+  History,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  Save,
+  Settings,
+  Trash2,
+  XCircle,
 } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-// ═══════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════
-interface EditLog {
-  id: number; date: string; instructor: string;
-  section: string; detail: string; time: string;
-}
+type PortalUser = {
+  id: string;
+  displayName: string;
+};
 
-// ═══════════════════════════════════════════════════════════
-// DATE / MONTH UTILITIES
-// ═══════════════════════════════════════════════════════════
-const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const MONTH_INDEX: Record<string,number> = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+type Teacher = {
+  portal_user?: string;
+  id: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+};
 
-function parseDateParts(dateStr: string) {
-  const p = dateStr.trim().split("-");
-  if (p.length !== 3) return null;
-  const day = parseInt(p[0]), mi = MONTH_INDEX[p[1].toLowerCase()], year = parseInt(p[2]);
-  if (isNaN(day) || mi === undefined || isNaN(year)) return null;
-  return { day, month: mi, year };
-}
+type DailyRecord = {
+  id?: string;
+  portal_user: string;
+  date_iso: string;
+  date_label: string;
+  month_key: string;
+  sort_order: number;
+  completed: Record<string, number>;
+  cancelled: Record<string, number>;
+  notes: string;
+};
 
-function getMonthKey(dateStr: string): string {
-  const p = parseDateParts(dateStr);
-  if (!p) return "0000-00";
-  if (p.day >= 25) return `${p.year}-${String(p.month + 1).padStart(2, "0")}`;
-  const pm = p.month === 0 ? 11 : p.month - 1;
-  const py = p.month === 0 ? p.year - 1 : p.year;
-  return `${py}-${String(pm + 1).padStart(2, "0")}`;
-}
+type EditLog = {
+  id: string;
+  date_label: string;
+  teacher_name: string;
+  section: "completed" | "cancelled" | "notes" | "teachers" | "save";
+  detail: string;
+  time: string;
+};
 
-function getMonthLabel(mk: string): string {
-  const [y, m] = mk.split("-").map(Number);
-  return `${MONTH_NAMES[m - 1]} ${y}`;
-}
+const PORTAL_USERS: PortalUser[] = [
+  { id: "zainab", displayName: "Zainab" },
+  { id: "aniqa", displayName: "Aniqa" },
+  { id: "bilal", displayName: "Bilal" },
+];
 
-function getMonthRange(mk: string): string {
-  const [y, m] = mk.split("-").map(Number);
-  const s = `25-${MONTH_SHORT[m - 1]}-${y}`;
-  let nm = m + 1, ny = y; if (nm > 12) { nm = 1; ny++; }
-  return `${s} → 25-${MONTH_SHORT[nm - 1]}-${ny}`;
-}
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
-// ═══════════════════════════════════════════════════════════
-// CSV UTILITIES
-// ═══════════════════════════════════════════════════════════
-function parseCSVLine(line: string): string[] {
-  const r: string[] = []; let c = "", q = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (q) { if (ch === '"' && line[i+1] === '"') { c += '"'; i++; } else if (ch === '"') q = false; else c += ch; }
-    else { if (ch === '"') q = true; else if (ch === ",") { r.push(c); c = ""; } else c += ch; }
-  }
-  r.push(c); return r;
-}
+const MONTH_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
-function generateCSV(records: ClassRecord[]): string {
-  const h = ["Date"];
-  C_LABELS.forEach(l => h.push(`Completed ${l}`)); h.push("Completed Daily Total");
-  X_LABELS.forEach(l => h.push(`Cancelled ${l}`)); h.push("Cancelled Daily Total");
-  const rows = records.map(r => {
-    const row: string[] = [r.date];
-    C_KEYS.forEach(k => row.push(String(r.completed[k] || 0))); row.push(String(r.completed.dailyTotal));
-    X_KEYS.forEach(k => row.push(String(r.cancelled[k] || 0))); row.push(String(r.cancelled.dailyTotal));
-    return row.join(",");
+const START_MONTH_KEY = "2026-03";
+const END_MONTH_KEY = "2027-12";
+
+const DEFAULT_TEACHERS: Teacher[] = ALL_KEYS.map((id, index) => ({
+  id,
+  name: LABEL_MAP[id] || id,
+  sort_order: index,
+  is_active: true,
+}));
+function makeUniqueTeachers(list: Teacher[], userId: string): Teacher[] {
+  const used = new Set<string>();
+
+  return list.map((teacher, index) => {
+    const baseId = String(teacher.id || slugify(teacher.name) || `teacher_${index + 1}`);
+    let finalId = baseId;
+    let counter = 2;
+
+    while (used.has(finalId)) {
+      finalId = `${baseId}_${counter}`;
+      counter += 1;
+    }
+
+    used.add(finalId);
+
+    return {
+      ...teacher,
+      portal_user: userId,
+      id: finalId,
+      name: teacher.name || `Teacher ${index + 1}`,
+      sort_order: index,
+      is_active: teacher.is_active !== false,
+    };
   });
-  return [h.join(","), ...rows].join("\n");
 }
 
-function parseCSV(text: string): ClassRecord[] {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) throw new Error("CSV needs header + data");
-  const headers = parseCSVLine(lines[0]);
-  const records: ClassRecord[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = parseCSVLine(lines[i]);
-    if (vals.length < 2) continue;
-    const rec: ClassRecord = { id: undefined, date: vals[0].trim(), sort_order: i - 1, completed: {} as any, cancelled: {} as any };
-    headers.forEach((h, idx) => {
-      const col = h.trim(), val = parseInt(vals[idx]) || 0;
-      if (col === "Completed Daily Total") rec.completed.dailyTotal = val;
-      else if (col === "Cancelled Daily Total") rec.cancelled.dailyTotal = val;
-      else if (col.startsWith("Completed ")) { const k = KEY_MAP[col.replace("Completed ", "")]; if (k) (rec.completed as any)[k] = val; }
-      else if (col.startsWith("Cancelled ")) { const k = KEY_MAP[col.replace("Cancelled ", "")]; if (k) (rec.cancelled as any)[k] = val; }
-    });
-    ALL_KEYS.forEach(k => { if (!(k in rec.completed)) (rec.completed as any)[k] = 0; if (!(k in rec.cancelled)) (rec.cancelled as any)[k] = 0; });
-    if (rec.completed.dailyTotal === undefined) rec.completed.dailyTotal = 0;
-    if (rec.cancelled.dailyTotal === undefined) rec.cancelled.dailyTotal = 0;
-    rec.month_key = getMonthKey(rec.date);
-    records.push(rec);
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function dateISO(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function dateLabel(d: Date) {
+  return `${pad(d.getDate())}-${MONTH_SHORT[d.getMonth()]}-${d.getFullYear()}`;
+}
+
+function addDays(d: Date, days: number) {
+  const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function getCycleKeyFromDate(d: Date) {
+  let y = d.getFullYear();
+  let m = d.getMonth();
+
+  if (d.getDate() < 25) {
+    m -= 1;
+    if (m < 0) {
+      m = 11;
+      y -= 1;
+    }
   }
-  return records;
+
+  return `${y}-${pad(m + 1)}`;
 }
 
-function recalcDailyTotal(rec: ClassRecord, section: "completed" | "cancelled") {
-  const keys = section === "completed" ? C_KEYS : X_KEYS;
-  rec[section].dailyTotal = keys.reduce((s, k) => s + (rec[section][k] || 0), 0);
+function parseMonthKey(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return { year, monthIndex: month - 1 };
 }
 
-// ═══════════════════════════════════════════════════════════
-// TOTALS
-// ═══════════════════════════════════════════════════════════
-function calcTotals(data: ClassRecord[]) {
-  const c: Record<string,number> = {}, x: Record<string,number> = {};
-  ALL_KEYS.forEach(k => { c[k] = 0; x[k] = 0; });
-  let gc = 0, xc = 0;
-  data.forEach(r => { C_KEYS.forEach(k => { c[k] += r.completed[k]||0; }); X_KEYS.forEach(k => { x[k] += r.cancelled[k]||0; }); gc += r.completed.dailyTotal||0; xc += r.cancelled.dailyTotal||0; });
-  return { completed: c, cancelled: x, grandCompleted: gc, grandCancelled: xc };
+function getMonthLabel(monthKey: string) {
+  const { year, monthIndex } = parseMonthKey(monthKey);
+  return `${MONTH_NAMES[monthIndex]} ${year}`;
 }
 
-function calcTeacherTotals(data: ClassRecord[], teacherKey: string) {
-  let c = 0, x = 0;
-  data.forEach(r => { c += r.completed[teacherKey as keyof typeof r.completed] || 0; x += r.cancelled[teacherKey as keyof typeof r.cancelled] || 0; });
-  return { completed: c, cancelled: x };
+function getMonthRange(monthKey: string) {
+  const { year, monthIndex } = parseMonthKey(monthKey);
+  const start = new Date(year, monthIndex, 25);
+  const end = new Date(year, monthIndex + 1, 24);
+  return `${dateLabel(start)} → ${dateLabel(end)}`;
 }
 
-// ═══════════════════════════════════════════════════════════
-// BLOB DOWNLOAD
-// ═══════════════════════════════════════════════════════════
-function dlBlob(blob: Blob, name: string) {
-  const u = URL.createObjectURL(blob), a = document.createElement("a");
-  a.href = u; a.download = name; document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(u);
+function makeMonthKeys(startKey = START_MONTH_KEY, endKey = END_MONTH_KEY) {
+  const start = parseMonthKey(startKey);
+  const end = parseMonthKey(endKey);
+  const keys: string[] = [];
+
+  let y = start.year;
+  let m = start.monthIndex;
+
+  while (y < end.year || (y === end.year && m <= end.monthIndex)) {
+    keys.push(`${y}-${pad(m + 1)}`);
+    m += 1;
+
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+
+  return keys.reverse();
 }
 
-// ═══════════════════════════════════════════════════════════
-// EDITABLE CELL
-// ═══════════════════════════════════════════════════════════
-function EditableCell({ value, onSave, rowIdx, colKey }: {
-  value: number; onSave: (v: number) => void; rowIdx: number; colKey: string;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [tmp, setTmp] = useState("0");
-  const ref = useRef<HTMLInputElement>(null);
+function datesForMonth(monthKey: string) {
+  const { year, monthIndex } = parseMonthKey(monthKey);
+  const start = new Date(year, monthIndex, 25);
+  const end = new Date(year, monthIndex + 1, 24);
+  const dates: Date[] = [];
 
-  useEffect(() => { if (editing && ref.current) { ref.current.focus(); ref.current.select(); } }, [editing]);
+  for (let d = start; d <= end; d = addDays(d, 1)) {
+    dates.push(d);
+  }
 
-  const save = useCallback(() => {
-    const n = Math.max(0, Math.min(99, parseInt(tmp) || 0)); onSave(n); setEditing(false);
-  }, [tmp, onSave]);
+  return dates;
+}
 
-  const cancel = useCallback(() => { setTmp(String(value)); setEditing(false); }, [value]);
+function currentMonthKey(months: string[]) {
+  const todayKey = getCycleKeyFromDate(new Date());
+  if (months.includes(todayKey)) return todayKey;
+  return months[months.length - 1] || START_MONTH_KEY;
+}
 
-  if (editing) return (
-    <input ref={ref} type="number" min={0} max={99} value={tmp} onChange={e => setTmp(e.target.value)}
-      onBlur={save}
-      onKeyDown={e => {
-        if (e.key === "Enter") { e.preventDefault(); save(); navNext(rowIdx, colKey, 1); }
-        if (e.key === "Escape") { e.preventDefault(); cancel(); }
-        if (e.key === "Tab") { e.preventDefault(); save(); navNext(rowIdx, colKey, e.shiftKey ? -1 : 1); }
-        if (e.key === "ArrowDown") { e.preventDefault(); save(); navVert(rowIdx, colKey, 1); }
-        if (e.key === "ArrowUp") { e.preventDefault(); save(); navVert(rowIdx, colKey, -1); }
-      }}
-      className="w-14 h-8 text-center text-sm font-semibold border-2 border-primary rounded-md bg-background outline-none focus:ring-2 focus:ring-primary/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-    />
-  );
-
+function slugify(value: string) {
   return (
-    <span onClick={() => { setTmp(String(value)); setEditing(true); }}
-      data-er={rowIdx} data-ek={colKey}
-      className={`cursor-pointer hover:bg-primary/10 rounded-md px-2 py-1 transition-colors inline-flex items-center justify-center min-w-[2.5rem] text-center text-sm ${value > 0 ? "font-medium text-foreground" : "text-muted-foreground/30"}`}
-      title="Click to edit">{value}</span>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || `teacher_${Date.now()}`
   );
 }
 
-function getEditCells(): HTMLElement[] { return Array.from(document.querySelectorAll("[data-er]")); }
-function navNext(cr: number, ck: string, dir: number) {
-  const cells = getEditCells(); const ci = cells.findIndex(c => c.dataset.er === String(cr) && c.dataset.ek === ck);
-  if (ci === -1) return; let ni = ci + dir; if (ni >= cells.length) ni = 0; if (ni < 0) ni = cells.length - 1;
-  (cells[ni] as HTMLElement)?.click();
-}
-function navVert(cr: number, ck: string, dir: number) {
-  const cells = getEditCells(); const ci = cells.findIndex(c => c.dataset.er === String(cr) && c.dataset.ek === ck);
-  if (ci === -1) return;
-  for (let i = ci + dir; i >= 0 && i < cells.length; i += dir) { if (cells[i].dataset.ek === ck) { (cells[i] as HTMLElement)?.click(); return; } }
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let quoted = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ",") {
+      result.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+
+  result.push(current);
+  return result.map((v) => v.trim());
 }
 
-// ═══════════════════════════════════════════════════════════
-// METRIC CARD (inline)
-// ═══════════════════════════════════════════════════════════
-function MC({ title, value, icon: Icon, desc, variant = "default" }: {
-  title: string; value: string | number; icon: any; desc: string; variant?: "default" | "success" | "danger" | "info";
+function buildBlankRecord(
+  userId: string,
+  d: Date,
+  sortOrder: number,
+  teachers: Teacher[],
+): DailyRecord {
+  const completed: Record<string, number> = {};
+  const cancelled: Record<string, number> = {};
+
+  teachers.forEach((teacher) => {
+    completed[teacher.id] = 0;
+    cancelled[teacher.id] = 0;
+  });
+
+  return {
+    portal_user: userId,
+    date_iso: dateISO(d),
+    date_label: dateLabel(d),
+    month_key: getCycleKeyFromDate(d),
+    sort_order: sortOrder,
+    completed,
+    cancelled,
+    notes: "",
+  };
+}
+
+function normalizeRecord(row: DailyRecord, teachers: Teacher[]): DailyRecord {
+  const completed: Record<string, number> = { ...row.completed };
+  const cancelled: Record<string, number> = { ...row.cancelled };
+
+  teachers.forEach((teacher) => {
+    if (completed[teacher.id] === undefined) completed[teacher.id] = 0;
+    if (cancelled[teacher.id] === undefined) cancelled[teacher.id] = 0;
+  });
+
+  return {
+    ...row,
+    completed,
+    cancelled,
+    notes: row.notes || "",
+  };
+}
+
+function escapeCSV(value: string | number) {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function generateCSV(records: DailyRecord[], teachers: Teacher[]) {
+  const activeTeachers = teachers;
+
+  const header = [
+    "Date",
+    ...activeTeachers.map((t) => `Completed ${t.name}`),
+    "Completed Daily Total",
+    ...activeTeachers.map((t) => `Cancelled ${t.name}`),
+    "Cancelled Daily Total",
+    "Notes",
+  ];
+
+  const rows = records.map((record) => {
+    const completedTotal = activeTeachers.reduce(
+      (sum, teacher) => sum + (record.completed[teacher.id] || 0),
+      0,
+    );
+    const cancelledTotal = activeTeachers.reduce(
+      (sum, teacher) => sum + (record.cancelled[teacher.id] || 0),
+      0,
+    );
+
+    return [
+      record.date_label,
+      ...activeTeachers.map((teacher) => record.completed[teacher.id] || 0),
+      completedTotal,
+      ...activeTeachers.map((teacher) => record.cancelled[teacher.id] || 0),
+      cancelledTotal,
+      record.notes || "",
+    ]
+      .map(escapeCSV)
+      .join(",");
+  });
+
+  return [header.map(escapeCSV).join(","), ...rows].join("\n");
+}
+
+function MetricCard({
+  title,
+  value,
+  desc,
+  icon: Icon,
+  variant = "default",
+}: {
+  title: string;
+  value: string | number;
+  desc: string;
+  icon: ComponentType<{ className?: string }>;
+  variant?: "default" | "success" | "danger" | "warning";
 }) {
-  const bc = { default: "border-l-blue-500", success: "border-l-emerald-500", danger: "border-l-red-500", info: "border-l-amber-500" }[variant];
-  const ic = { default: "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400", success: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400", danger: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400", info: "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400" }[variant];
+  const border = {
+    default: "border-l-blue-500",
+    success: "border-l-emerald-500",
+    danger: "border-l-red-500",
+    warning: "border-l-amber-500",
+  }[variant];
+
   return (
-    <Card className={`border-l-4 ${bc} hover:shadow-md transition-shadow`}>
+    <Card className={`border-l-4 ${border}`}>
       <CardContent className="p-5">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">{title}</p>
             <p className="text-2xl font-bold tracking-tight">{value}</p>
             <p className="text-xs text-muted-foreground">{desc}</p>
           </div>
-          <div className={`p-3 rounded-xl ${ic}`}><Icon className="h-5 w-5" /></div>
+          <div className="rounded-2xl bg-muted p-3">
+            <Icon className="h-5 w-5" />
+          </div>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-// ═══════════════════════════════════════════════════════════
-// SQL SCHEMA
-// ═══════════════════════════════════════════════════════════
-const SQL_SCHEMA = `CREATE TABLE IF NOT EXISTS class_records (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  date TEXT NOT NULL UNIQUE,
-  sort_order INTEGER DEFAULT 0,
-  month_key TEXT NOT NULL,
-  data JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+function EditableCell({
+  value,
+  onSave,
+}: {
+  value: number;
+  onSave: (value: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value || 0));
+  const ref = useRef<HTMLInputElement>(null);
 
-CREATE INDEX IF NOT EXISTS idx_class_records_month
-  ON class_records(month_key);
+  useEffect(() => {
+    if (editing) {
+      setDraft(String(value || 0));
+      setTimeout(() => ref.current?.select(), 0);
+    }
+  }, [editing, value]);
 
-ALTER TABLE class_records DISABLE ROW LEVEL SECURITY;`;
+  const commit = () => {
+    const next = Math.max(
+      0,
+      Math.min(999, Number.parseInt(draft || "0", 10) || 0),
+    );
+    onSave(next);
+    setEditing(false);
+  };
 
-// ═══════════════════════════════════════════════════════════
-// MAIN PAGE
-// ═══════════════════════════════════════════════════════════
-export default function ClassTrackerPage() {
-  const [allMonths, setAllMonths] = useState<string[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState<string>("");
-  const [monthData, setMonthData] = useState<ClassRecord[]>([]);
-  const [selectedTeacher, setSelectedTeacher] = useState<string>("all");
+  if (editing) {
+    return (
+      <input
+        ref={ref}
+        value={draft}
+        type="number"
+        min={0}
+        max={999}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "Tab") {
+            e.preventDefault();
+            commit();
+          }
 
-  const [loading, setLoading] = useState(true);
-  const [isDirty, setIsDirty] = useState(false);
-  const [snapshot, setSnapshot] = useState<ClassRecord[] | null>(null);
-  const [pushing, setPushing] = useState(false);
-  const [pulling, setPulling] = useState(false);
-  const [editLogs, setEditLogs] = useState<EditLog[]>([]);
-  const logRef = useRef(0);
-
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [importMode, setImportMode] = useState<"replace" | "merge">("replace");
-  const [uploadFile, setUploadFile] = useState<string | null>(null);
-  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
-  const [parsedUpload, setParsedUpload] = useState<ClassRecord[] | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const [sqlOpen, setSqlOpen] = useState(false);
-
-  // ─── Fetch months ───────────────────────────────────────
-  const fetchMonths = useCallback(async () => {
-  setLoading(true); // ensure loading true initially
-  try {
-    const { data, error } = await supabase
-      .from("class_records")
-      .select("month_key")
-      .order("month_key", { ascending: false });
-    
-    if (error) throw error;
-    
-    const unique = [...new Set(data?.map(r => r.month_key) || [])].filter(Boolean).sort().reverse();
-    setAllMonths(unique);
-    if (unique.length > 0 && !selectedMonth) setSelectedMonth(unique[0]);
-  } catch (e) {
-    console.error("Failed to fetch months:", e);
-    setAllMonths([]);
-  } finally {
-    setLoading(false);
+          if (e.key === "Escape") {
+            setEditing(false);
+          }
+        }}
+        className="h-8 w-14 rounded-md border-2 border-primary bg-background text-center text-sm font-semibold outline-none"
+      />
+    );
   }
-}, [selectedMonth]);
 
-  // ─── Fetch month data ───────────────────────────────────
-  const fetchMonthData = useCallback(async (mk: string) => {
-  setLoading(true);
-  try {
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className={`inline-flex min-w-10 items-center justify-center rounded-md px-2 py-1 text-sm transition hover:bg-primary/10 ${value > 0 ? "font-semibold text-foreground" : "text-muted-foreground/40"
+        }`}
+      title="Click to edit"
+    >
+      {value || 0}
+    </button>
+  );
+}
+
+export default function AdvancedClassPortalPage() {
+  const monthKeys = useMemo(() => makeMonthKeys(), []);
+
+  const [selectedUser, setSelectedUser] = useState(PORTAL_USERS[0].id);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey(monthKeys));
+  const [selectedTeacher, setSelectedTeacher] = useState("all");
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [deletingTeacherId, setDeletingTeacherId] = useState<string | null>(null);
+  const [rows, setRows] = useState<DailyRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [teacherForm, setTeacherForm] = useState<{
+    mode: "create" | "edit";
+    id: string;
+    name: string;
+  }>({
+    mode: "create",
+    id: "",
+    name: "",
+  });
+  const [status, setStatus] = useState<string | null>(null);
+  const [changeNotice, setChangeNotice] = useState<string | null>(null);
+  const [teacherOpen, setTeacherOpen] = useState(false);
+  const [logs, setLogs] = useState<EditLog[]>([]);
+
+  const logId = useRef(0);
+
+  const currentUser =
+    PORTAL_USERS.find((user) => user.id === selectedUser) || PORTAL_USERS[0];
+
+  const allTeachers = useMemo(
+    () => teachers.slice().sort((a, b) => a.sort_order - b.sort_order),
+    [teachers],
+  );
+
+  const activeTeachers = useMemo(
+    () => allTeachers.filter((teacher) => teacher.is_active),
+    [allTeachers],
+  );
+
+  const visibleTeachers =
+    selectedTeacher === "all"
+      ? activeTeachers
+      : allTeachers.filter((teacher) => teacher.id === selectedTeacher);
+
+  useEffect(() => {
+    const userParam = new URLSearchParams(window.location.search)
+      .get("user")
+      ?.toLowerCase();
+
+    const match = PORTAL_USERS.find(
+      (user) =>
+        user.id === userParam || user.displayName.toLowerCase() === userParam,
+    );
+
+    if (match) setSelectedUser(match.id);
+  }, []);
+
+  useEffect(() => {
+    if (!changeNotice) return;
+
+    const timer = window.setTimeout(() => {
+      setChangeNotice(null);
+    }, 5000);
+
+    return () => window.clearTimeout(timer);
+  }, [changeNotice]);
+
+  const addLog = useCallback(
+    (
+      record: DailyRecord | null,
+      teacher: Teacher | null,
+      section: EditLog["section"],
+      detail: string,
+    ) => {
+      logId.current += 1;
+
+      const teacherName = teacher?.name || "System";
+      const dateLabelText = record?.date_label || getMonthLabel(selectedMonth);
+
+      const newLog: EditLog = {
+        id: `${Date.now()}-${logId.current}-${Math.random().toString(36).slice(2)}`,
+        date_label: dateLabelText,
+        teacher_name: teacherName,
+        section,
+        detail,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+
+      setLogs((prev) => [newLog, ...prev.slice(0, 29)]);
+    },
+    [selectedMonth],
+  );
+
+  const notifyChange = useCallback((message: string) => {
+    setChangeNotice(message);
+  }, []);
+
+  const logChange = useCallback(
+    (
+      record: DailyRecord,
+      teacher: Teacher | null,
+      section: EditLog["section"],
+      detail: string,
+    ) => {
+      const teacherName = teacher?.name || "Notes";
+      addLog(record, teacher, section, detail);
+      notifyChange(`${teacherName} changed on ${record.date_label}: ${detail}`);
+    },
+    [addLog, notifyChange],
+  );
+
+  const fetchTeachers = useCallback(async () => {
     const { data, error } = await supabase
-      .from("class_records")
-      .select("*")
-      .eq("month_key", mk)
+      .from("class_portal_teachers")
+      .select("portal_user,id,name,sort_order,is_active")
+      .eq("portal_user", selectedUser)
       .order("sort_order", { ascending: true });
-    
+
     if (error) {
-      console.error("Supabase error details:", {
+      console.warn("Teacher table read failed.", {
         message: error.message,
         details: error.details,
         hint: error.hint,
-        code: error.code
+        code: error.code,
       });
-      throw error;
+
+      setTeachers([]);
+      setStatus(
+        `Teacher table read failed: ${error.message || "Please check the Supabase teacher table."
+        }`,
+      );
+
+      return [];
     }
-    
-    if (data && data.length > 0) {
-      setMonthData(data.map((r: any) => ({ 
-        id: r.id, 
-        date: r.date, 
-        sort_order: r.sort_order, 
-        month_key: r.month_key, 
-        completed: r.data.completed, 
-        cancelled: r.data.cancelled 
-      })));
-    } else {
-      setMonthData([]);
-    }
-  } catch (e: any) {
-    console.error("Failed to fetch month data:", e?.message || e, e);
-    setMonthData([]);
-  } finally {
-    setLoading(false);
-  }
-}, []);
 
-  // ─── Init ───────────────────────────────────────────────
-  useEffect(() => { fetchMonths(); }, []);
-  useEffect(() => { if (selectedMonth) fetchMonthData(selectedMonth); }, [selectedMonth, fetchMonthData]);
+    const normalized = makeUniqueTeachers((data || []) as Teacher[], selectedUser);
 
-  // ─── Month navigation ───────────────────────────────────
-  const switchMonth = (mk: string) => {
-    if (isDirty && !window.confirm("You have unsaved changes. Discard and switch month?")) return;
-    setSelectedMonth(mk); setSnapshot(null); setIsDirty(false); setEditLogs([]);
-  };
-  const goPrevMonth = () => { const idx = allMonths.indexOf(selectedMonth); if (idx < allMonths.length - 1) switchMonth(allMonths[idx + 1]); };
-  const goNextMonth = () => { const idx = allMonths.indexOf(selectedMonth); if (idx > 0) switchMonth(allMonths[idx - 1]); };
+    setTeachers(normalized);
+    return normalized;
+  }, [selectedUser]);;
 
-  // ─── Dirty tracking ─────────────────────────────────────
-  const markDirty = useCallback((nd: ClassRecord[]) => {
-    if (!snapshot) setSnapshot(JSON.parse(JSON.stringify(monthData)));
-    setIsDirty(true);
-  }, [snapshot, monthData]);
+  const fetchMonthRecords = useCallback(
+    async (userId: string, monthKey: string, teacherList: Teacher[]) => {
+      setLoading(true);
+      setStatus(null);
 
-  const discardChanges = () => {
-    if (snapshot) { setMonthData(JSON.parse(JSON.stringify(snapshot))); setSnapshot(null); }
-    setIsDirty(false); setEditLogs([]);
-  };
+      try {
+        const { data, error } = await supabase
+          .from("class_portal_records")
+          .select("id,portal_user,date_iso,date_label,month_key,sort_order,data")
+          .eq("portal_user", userId)
+          .eq("month_key", monthKey)
+          .order("sort_order", { ascending: true });
 
-  useEffect(() => {
-    const h = (e: BeforeUnloadEvent) => { if (isDirty) { e.preventDefault(); e.returnValue = ""; } };
-    window.addEventListener("beforeunload", h); return () => window.removeEventListener("beforeunload", h);
-  }, [isDirty]);
+        if (error) throw error;
 
-  // ─── Data change ────────────────────────────────────────
-  const handleDataChange = useCallback((updated: ClassRecord[]) => { setMonthData(updated); markDirty(updated); }, [markDirty]);
+        const existing = new Map<string, DailyRecord>();
 
-  // ─── Edit log ───────────────────────────────────────────
-  const handleEdit = useCallback((date: string, instructor: string, section: string, oldV: number, newV: number) => {
-    logRef.current++;
-    setEditLogs(prev => [{ id: logRef.current, date, instructor, section: section === "completed" ? "Completed" : "Cancelled", detail: `${instructor}: ${oldV} → ${newV}`, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }, ...prev.slice(0, 19)]);
-  }, []);
+        (data || []).forEach((raw: any) => {
+          const iso = String(raw.date_iso).slice(0, 10);
 
-  // ─── Push ───────────────────────────────────────────────
-  const pushToSupabase = async () => {
-    setPushing(true);
-    try {
-      const rows = monthData.map((r, i) => ({ date: r.date, sort_order: i, month_key: getMonthKey(r.date), data: { completed: r.completed, cancelled: r.cancelled } }));
-      const { error } = await supabase.from("class_records").upsert(rows, { onConflict: "date" });
-      if (error) throw error;
-      setSnapshot(null); setIsDirty(false); setEditLogs([]);
-      fetchMonths();
-    } catch (e: any) { alert("Push failed: " + e.message); }
-    finally { setPushing(false); }
-  };
+          existing.set(
+            iso,
+            normalizeRecord(
+              {
+                id: raw.id,
+                portal_user: raw.portal_user,
+                date_iso: iso,
+                date_label: raw.date_label,
+                month_key: raw.month_key,
+                sort_order: raw.sort_order,
+                completed: raw.data?.completed || {},
+                cancelled: raw.data?.cancelled || {},
+                notes: raw.data?.notes || "",
+              },
+              teacherList,
+            ),
+          );
+        });
 
-  // ─── Pull ───────────────────────────────────────────────
-  const pullFromSupabase = async () => {
-    if (isDirty && !window.confirm("Unsaved changes will be lost. Continue?")) return;
-    setPulling(true);
-    try {
-      await fetchMonths();
-      if (selectedMonth) await fetchMonthData(selectedMonth);
-      setSnapshot(null); setIsDirty(false); setEditLogs([]);
-    } catch (e: any) { alert("Pull failed: " + e.message); }
-    finally { setPulling(false); }
-  };
+        const generated = datesForMonth(monthKey).map((d, index) => {
+          const iso = dateISO(d);
+          return existing.get(iso) || buildBlankRecord(userId, d, index, teacherList);
+        });
 
-  // ─── CSV Export ─────────────────────────────────────────
-  const dlCSV = () => {
-    const csv = generateCSV(monthData);
-    dlBlob(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" }), `class-tracker-${selectedMonth}.csv`);
-  };
+        setRows(generated);
+        setIsDirty(false);
+      } catch (error: any) {
+        const errorInfo = {
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+          code: error?.code,
+        };
 
-  // ─── Excel Export ───────────────────────────────────────
-  const dlExcel = async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const XLSX: any = await import("xlsx");
-    const wb = XLSX.utils.book_new();
-    const h1 = ["Date", ...Array(11).fill("Completed Classes"), "Daily Total", ...Array(11).fill("Cancelled Classes"), "Daily Total"];
-    const h2 = ["", ...C_KEYS.map(k => LABEL_MAP[k]), "Total", ...X_KEYS.map(k => LABEL_MAP[k]), "Total"];
-    const arr: any[][] = [h1, h2];
-    const t = calcTotals(monthData);
-    monthData.forEach(r => { arr.push([r.date, ...C_KEYS.map(k => r.completed[k]), r.completed.dailyTotal, ...X_KEYS.map(k => r.cancelled[k]), r.cancelled.dailyTotal]); });
-    arr.push(["GRAND TOTAL", ...C_KEYS.map(k => t.completed[k]), t.grandCompleted, ...X_KEYS.map(k => t.cancelled[k]), t.grandCancelled]);
-    const ws = XLSX.utils.aoa_to_sheet(arr);
-    ws["!cols"] = [{ wch: 16 }, ...Array(24).fill(null).map(() => ({ wch: 12 }))];
-    ws["!merges"] = [{ s: { r: 0, c: 1 }, e: { r: 0, c: 11 } }, { s: { r: 0, c: 13 }, e: { r: 0, c: 23 } }];
-    XLSX.utils.book_append_sheet(wb, ws, "Class Data");
-    XLSX.writeFile(wb, `class-tracker-${selectedMonth}.xlsx`);
-  };
+        console.warn("fetchMonthRecords failed:", errorInfo);
 
-  // ─── CSV Import ─────────────────────────────────────────
-  const processFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) { setUploadPreview("Error: Please upload a .csv file"); return; }
-    setUploadFile(file.name);
-    const text = await file.text();
-    try {
-      const records = parseCSV(text);
-      if (records.length === 0) { setUploadPreview("No valid records found."); return; }
-      const months = records.map(r => r.month_key).filter((m): m is string => Boolean(m));
-      const uniqueMonths = [...new Set(months)];
-      setParsedUpload(records);
-      setUploadPreview(`${records.length} records found. Months detected: ${uniqueMonths.map(m => getMonthLabel(m)).join(", ")}`);
-    } catch (e: any) { setUploadPreview("Parse error: " + e.message); }
-  };
+        setRows(
+          datesForMonth(monthKey).map((d, index) =>
+            buildBlankRecord(userId, d, index, teacherList),
+          ),
+        );
 
-  const executeImport = () => {
-    if (!parsedUpload?.length) return;
-    if (importMode === "replace") { setMonthData(parsedUpload); }
-    else {
-      const merged = [...monthData];
-      parsedUpload.forEach(nr => { const i = merged.findIndex(r => r.date === nr.date); if (i >= 0) merged[i] = nr; else merged.push(nr); });
-      setMonthData(merged);
-    }
-    const mkCounts: Record<string,number> = {};
-    parsedUpload.forEach(r => { const mk = getMonthKey(r.date); mkCounts[mk] = (mkCounts[mk] || 0) + 1; });
-    const topMonth = Object.entries(mkCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (topMonth) {
-      if (!allMonths.includes(topMonth)) setAllMonths(prev => [...new Set([topMonth, ...prev])].sort().reverse());
-      setSelectedMonth(topMonth);
-    }
-    markDirty(importMode === "replace" ? parsedUpload : monthData);
-    setUploadOpen(false); resetUpload();
-  };
-
-  const resetUpload = () => { setUploadFile(null); setUploadPreview(null); setParsedUpload(null); if (fileRef.current) fileRef.current.value = ""; };
-
-  // ═══════════════════════════════════════════════════════════
-  // COMPUTED VALUES
-  // ═══════════════════════════════════════════════════════════
-  const isTeacherView = selectedTeacher !== "all";
-  const totals = calcTotals(monthData);
-  const teacherTotals = isTeacherView ? calcTeacherTotals(monthData, selectedTeacher) : null;
-  const days = monthData.length;
-  const totalC = isTeacherView ? teacherTotals!.completed : totals.grandCompleted;
-  const totalX = isTeacherView ? teacherTotals!.cancelled : totals.grandCancelled;
-  const avg = days > 0 ? (totalC / days).toFixed(1) : "0";
-  const rate = totalC + totalX > 0 ? ((totalC / (totalC + totalX)) * 100).toFixed(1) : "100";
-  const topPerformer = ALL_KEYS.reduce((b, k) => totals.completed[k] > totals.completed[b] ? k : b, ALL_KEYS[0]);
-  const highCancelDays = monthData.filter(r => r.cancelled.dailyTotal >= 3).sort((a, b) => b.cancelled.dailyTotal - a.cancelled.dailyTotal).slice(0, 3);
-
-  const barData = isTeacherView
-    ? [{ name: LABEL_MAP[selectedTeacher], completed: teacherTotals!.completed, cancelled: teacherTotals!.cancelled }]
-    : C_KEYS.map(k => ({ name: LABEL_MAP[k], completed: totals.completed[k], cancelled: totals.cancelled[k] || 0 }));
-
-  const trendData = monthData.map(r => ({
-    date: r.date.length > 7 ? r.date.substring(0, 6) : r.date,
-    completed: isTeacherView ? (r.completed[selectedTeacher as keyof typeof r.completed] || 0) : r.completed.dailyTotal,
-    cancelled: isTeacherView ? (r.cancelled[selectedTeacher as keyof typeof r.cancelled] || 0) : r.cancelled.dailyTotal,
-  }));
-
-  const pieData = [{ name: "Completed", value: totalC }, { name: "Cancelled", value: totalX }];
-  const PIE_C = ["#059669", "#DC2626"];
-
-  // ═══════════════════════════════════════════════════════════
-  // LOADING
-  // ═══════════════════════════════════════════════════════════
-  if (loading) return (
-    <div className="space-y-6"><div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div></div>
+        setStatus(
+          `Database read failed: ${error?.message ||
+          error?.details ||
+          error?.hint ||
+          "Please run the Supabase SQL schema first and check your environment keys."
+          }`,
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
   );
 
-  // ═══════════════════════════════════════════════════════════
-  // EMPTY STATE
-  // ═══════════════════════════════════════════════════════════
-  if (!loading && allMonths.length === 0 && monthData.length === 0) {
-    return (
-      <div className="space-y-6">
-        <div><h1 className="text-3xl font-bold tracking-tight">Class Tracker</h1><p className="text-muted-foreground">Monitor instructor class completion and cancellations.</p></div>
-        <Card className="max-w-lg mx-auto">
-          <CardContent className="py-16 text-center space-y-6">
-            <div className="p-4 bg-muted rounded-2xl w-fit mx-auto"><Upload className="h-8 w-8 text-muted-foreground" /></div>
-            <div><h2 className="text-xl font-bold">No Data Yet</h2><p className="text-sm text-muted-foreground mt-1">Upload a CSV file to get started. Month cycles run from 25th to 25th.</p></div>
-            <div className="flex justify-center gap-3">
-              <Dialog open={uploadOpen} onOpenChange={o => { setUploadOpen(o); if (!o) resetUpload(); }}>
-                <DialogTrigger asChild><Button><Upload className="mr-2 h-4 w-4" />Upload CSV</Button></DialogTrigger>
-                <DialogContent><DialogHeader><DialogTitle>Upload CSV</DialogTitle></DialogHeader><UploadBody /></DialogContent>
-              </Dialog>
-              <Dialog open={sqlOpen} onOpenChange={setSqlOpen}>
-                <DialogTrigger asChild><Button variant="outline"><Database className="mr-2 h-4 w-4" />View SQL Schema</Button></DialogTrigger>
-                <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Supabase Table Schema</DialogTitle></DialogHeader>
-                  <p className="text-sm text-muted-foreground mb-3">Run this in your Supabase SQL Editor:</p>
-                  <pre className="bg-muted p-4 rounded-lg text-xs overflow-auto max-h-72 whitespace-pre-wrap">{SQL_SCHEMA}</pre>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const refreshAll = useCallback(async () => {
+    const loadedTeachers = await fetchTeachers();
+    await fetchMonthRecords(selectedUser, selectedMonth, loadedTeachers);
+  }, [fetchMonthRecords, fetchTeachers, selectedMonth, selectedUser]);
 
-  // ═══════════════════════════════════════════════════════════
-  // UPLOAD DIALOG BODY
-  // ═══════════════════════════════════════════════════════════
-  function UploadBody() {
-    return (
-      <div className="space-y-4 pt-2">
-        <div className="space-y-2">
-          <p className="text-sm font-semibold">Import Mode</p>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="csv-m" checked={importMode === "replace"} onChange={() => setImportMode("replace")} className="accent-primary" /> Replace current month</label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="csv-m" checked={importMode === "merge"} onChange={() => setImportMode("merge")} className="accent-primary" /> Merge (overwrite matching dates)</label>
-          </div>
-        </div>
-        <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) processFile(f); }}
-          onClick={() => fileRef.current?.click()}
-          className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary hover:bg-muted/30 transition-colors">
-          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); }} />
-          {uploadFile ? <p className="text-sm font-medium">{uploadFile}</p> : (<><Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" /><p className="text-sm font-medium">Drop CSV here or click to browse</p></>)}
-        </div>
-        {uploadPreview && <p className={`text-sm px-3 py-2 rounded-md ${uploadPreview.startsWith("Error") || uploadPreview.startsWith("Parse") ? "bg-destructive/10 text-destructive" : "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400"}`}>{uploadPreview}</p>}
-        <Button onClick={executeImport} className="w-full" disabled={!parsedUpload}>{importMode === "replace" ? "Import (Replace)" : "Import (Merge)"}</Button>
-        <p className="text-[11px] text-muted-foreground">Columns: Date, Completed Soha, ..., Completed Daily Total, Cancelled Anna, ..., Cancelled Daily Total</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    refreshAll();
+  }, [refreshAll]);
 
-  // ═══════════════════════════════════════════════════════════
-  // TABLE CELL SAVE — properly typed
-  // ═══════════════════════════════════════════════════════════
-  const handleCellSave = (rowIdx: number, section: "completed" | "cancelled", key: string, newVal: number) => {
-    const updated = monthData.map((r, i) => {
-      if (i !== rowIdx) return r;
-      // Deep clone to avoid mutation
-      const nr: ClassRecord = JSON.parse(JSON.stringify(r));
-      const oldVal = (nr[section] as Record<string, number>)[key] ?? 0;
-      (nr[section] as Record<string, number>)[key] = newVal;
-      recalcDailyTotal(nr, section);
-      if (oldVal !== newVal) handleEdit(r.date, LABEL_MAP[key] || key, section, oldVal, newVal);
-      return nr;
-    });
-    handleDataChange(updated);
+  useEffect(() => {
+    const channel = supabase
+      .channel(`class-portal-live-${selectedUser}-${selectedMonth}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "class_portal_records",
+          filter: `month_key=eq.${selectedMonth}`,
+        },
+        async (payload: any) => {
+          const changedRow = payload.new || payload.old;
+
+          if (!changedRow || changedRow.portal_user !== selectedUser) return;
+
+          notifyChange(
+            `Saved records were changed for ${currentUser.displayName} in ${getMonthLabel(
+              selectedMonth,
+            )}.`,
+          );
+
+          addLog(
+            null,
+            null,
+            "save",
+            `Database ${String(payload.eventType || "change").toLowerCase()} detected`,
+          );
+
+          await fetchMonthRecords(selectedUser, selectedMonth, teachers);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "class_portal_teachers",
+        },
+        async (payload: any) => {
+          notifyChange("Teacher settings were changed.");
+          addLog(
+            null,
+            null,
+            "teachers",
+            `Teacher database ${String(payload.eventType || "change").toLowerCase()} detected`,
+          );
+
+          await refreshAll();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [
+    addLog,
+    currentUser.displayName,
+    fetchMonthRecords,
+    notifyChange,
+    refreshAll,
+    selectedMonth,
+    selectedUser,
+    teachers,
+  ]);
+
+  const saveAll = async () => {
+    setSaving(true);
+    setStatus(null);
+
+    try {
+      const payload = rows.map((record, index) => ({
+        portal_user: selectedUser,
+        date_iso: record.date_iso,
+        date_label: record.date_label,
+        month_key: record.month_key,
+        sort_order: index,
+        data: {
+          completed: record.completed,
+          cancelled: record.cancelled,
+          notes: record.notes || "",
+        },
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error } = await supabase.from("class_portal_records").upsert(payload, {
+        onConflict: "portal_user,date_iso",
+      });
+
+      if (error) throw error;
+
+      setIsDirty(false);
+      setStatus("Saved. This month’s record has been saved permanently.");
+      notifyChange("This month’s record was saved successfully.");
+      addLog(null, null, "save", "Month record saved");
+    } catch (error: any) {
+      setStatus(`Save failed: ${error?.message || "Unknown error"}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════════
+  const resetTeacherForm = () => {
+    setTeacherForm({
+      mode: "create",
+      id: "",
+      name: "",
+    });
+  };
+
+  const saveTeachers = async (nextTeachers = teachers) => {
+    const cleaned = nextTeachers.map((teacher, index) => ({
+      portal_user: selectedUser,
+      id: teacher.id,
+      name: teacher.name.trim() || `Teacher ${index + 1}`,
+      sort_order: index,
+      is_active: teacher.is_active !== false,
+      updated_at: new Date().toISOString(),
+    }));
+
+    setTeachers(cleaned);
+
+    const { error } = await supabase.from("class_portal_teachers").upsert(cleaned, {
+      onConflict: "portal_user,id",
+    });
+
+    if (error) {
+      setStatus(`Teacher save failed: ${error.message}`);
+      return;
+    }
+
+    setRows((prev) => prev.map((row) => normalizeRecord(row, cleaned)));
+    setStatus("Teacher list updated. Existing records remain safe.");
+    notifyChange("Teacher list was updated.");
+    addLog(null, null, "teachers", "Teacher list updated");
+  };
+
+  const saveTeacherForm = async () => {
+    const name = teacherForm.name.trim();
+
+    if (!name) {
+      setStatus("Teacher name is required.");
+      return;
+    }
+
+    if (teacherForm.mode === "edit") {
+      const next = teachers.map((teacher) =>
+        teacher.id === teacherForm.id
+          ? {
+            ...teacher,
+            name,
+          }
+          : teacher,
+      );
+
+      await saveTeachers(next);
+      resetTeacherForm();
+      return;
+    }
+
+    const baseId = slugify(name);
+    let id = baseId;
+    let counter = 2;
+
+    while (teachers.some((teacher) => teacher.id === id)) {
+      id = `${baseId}_${counter}`;
+      counter += 1;
+    }
+
+    const next = [
+      ...teachers,
+      {
+        portal_user: selectedUser,
+        id,
+        name,
+        sort_order: teachers.length,
+        is_active: true,
+      },
+    ];
+
+    await saveTeachers(next);
+    resetTeacherForm();
+  };
+
+  const startEditTeacher = (teacher: Teacher) => {
+    setTeacherForm({
+      mode: "edit",
+      id: teacher.id,
+      name: teacher.name,
+    });
+  };
+
+  const deleteTeacher = async (teacher: Teacher) => {
+    const confirmed = confirm(
+      `Remove "${teacher.name}" from ${currentUser.displayName}'s teacher list? This will also remove this teacher's saved values from this user's records.`,
+    );
+
+    if (!confirmed) return;
+
+    setDeletingTeacherId(teacher.id);
+    setStatus(null);
+
+    try {
+      const { data: deletedRows, error: deleteTeacherError } = await supabase
+        .from("class_portal_teachers")
+        .delete()
+        .eq("portal_user", selectedUser)
+        .eq("id", teacher.id)
+        .select("id,name");
+
+      if (deleteTeacherError) {
+        throw deleteTeacherError;
+      }
+
+      if (!deletedRows || deletedRows.length === 0) {
+        setStatus(
+          `No teacher was deleted. Please check if "${teacher.name}" exists for ${currentUser.displayName}.`,
+        );
+        return;
+      }
+
+      const { data: savedRecords, error: readRecordsError } = await supabase
+        .from("class_portal_records")
+        .select("id,data")
+        .eq("portal_user", selectedUser);
+
+      if (readRecordsError) {
+        throw readRecordsError;
+      }
+
+      await Promise.all(
+        (savedRecords || []).map((record: any) => {
+          const data = record.data || {};
+          const completed = { ...(data.completed || {}) };
+          const cancelled = { ...(data.cancelled || {}) };
+
+          delete completed[teacher.id];
+          delete cancelled[teacher.id];
+
+          return supabase
+            .from("class_portal_records")
+            .update({
+              data: {
+                ...data,
+                completed,
+                cancelled,
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", record.id);
+        }),
+      );
+
+      const nextTeachers = teachers.filter((item) => item.id !== teacher.id);
+
+      setTeachers(nextTeachers);
+
+      setRows((prev) =>
+        prev.map((row) => {
+          const completed = { ...row.completed };
+          const cancelled = { ...row.cancelled };
+
+          delete completed[teacher.id];
+          delete cancelled[teacher.id];
+
+          return {
+            ...row,
+            completed,
+            cancelled,
+          };
+        }),
+      );
+
+      if (selectedTeacher === teacher.id) {
+        setSelectedTeacher("all");
+      }
+
+      if (teacherForm.id === teacher.id) {
+        resetTeacherForm();
+      }
+
+      setStatus(
+        `Teacher "${teacher.name}" was removed from ${currentUser.displayName}.`,
+      );
+      notifyChange(
+        `Teacher "${teacher.name}" was removed from ${currentUser.displayName}.`,
+      );
+      addLog(null, null, "teachers", `Teacher removed: ${teacher.name}`);
+    } catch (error: any) {
+      setStatus(`Teacher remove failed: ${error?.message || "Unknown error"}`);
+    } finally {
+      setDeletingTeacherId(null);
+    }
+  };
+
+
+
+  const updateCell = (
+    rowIndex: number,
+    section: "completed" | "cancelled",
+    teacher: Teacher,
+    value: number,
+  ) => {
+    setRows((prev) => {
+      const next = prev.map((row, index) => {
+        if (index !== rowIndex) return row;
+
+        const oldValue = row[section][teacher.id] || 0;
+
+        const updated = {
+          ...row,
+          [section]: {
+            ...row[section],
+            [teacher.id]: value,
+          },
+        } as DailyRecord;
+
+        if (oldValue !== value) {
+          logChange(
+            updated,
+            teacher,
+            section,
+            `${section === "completed" ? "Completed" : "Cancelled"}: ${oldValue} → ${value}`,
+          );
+        }
+
+        return updated;
+      });
+
+      return next;
+    });
+
+    setIsDirty(true);
+  };
+
+  const updateNotes = (rowIndex: number, value: string) => {
+    setRows((prev) =>
+      prev.map((row, index) => {
+        if (index !== rowIndex) return row;
+
+        const updated = {
+          ...row,
+          notes: value,
+        };
+
+        logChange(updated, null, "notes", "Notes updated");
+        return updated;
+      }),
+    );
+
+    setIsDirty(true);
+  };
+
+  const downloadCSV = () => {
+    const csv = generateCSV(rows, activeTeachers);
+    const blob = new Blob(["\ufeff" + csv], {
+      type: "text/csv;charset=utf-8",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = `${currentUser.id}-${selectedMonth}-class-record.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadExcel = async () => {
+    const XLSX: any = await import("xlsx");
+    const csv = generateCSV(rows, activeTeachers);
+    const workbook = XLSX.utils.book_new();
+
+    const worksheet = XLSX.utils.aoa_to_sheet(
+      csv.split("\n").map((line) => parseCSVLine(line)),
+    );
+
+    worksheet["!cols"] = [
+      { wch: 16 },
+      ...Array(activeTeachers.length * 2 + 3)
+        .fill(null)
+        .map(() => ({ wch: 14 })),
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, getMonthLabel(selectedMonth));
+    XLSX.writeFile(workbook, `${currentUser.id}-${selectedMonth}-class-record.xlsx`);
+  };
+
+  const totals = useMemo(() => {
+    const perTeacher = activeTeachers.map((teacher) => {
+      const completed = rows.reduce(
+        (sum, row) => sum + (row.completed[teacher.id] || 0),
+        0,
+      );
+      const cancelled = rows.reduce(
+        (sum, row) => sum + (row.cancelled[teacher.id] || 0),
+        0,
+      );
+
+      return {
+        teacher,
+        completed,
+        cancelled,
+        total: completed + cancelled,
+      };
+    });
+
+    const completed = perTeacher.reduce((sum, item) => sum + item.completed, 0);
+    const cancelled = perTeacher.reduce((sum, item) => sum + item.cancelled, 0);
+
+    const updatedDays = rows.filter((row) => {
+      const total = activeTeachers.reduce(
+        (sum, teacher) =>
+          sum +
+          (row.completed[teacher.id] || 0) +
+          (row.cancelled[teacher.id] || 0),
+        0,
+      );
+
+      return total > 0 || Boolean(row.notes?.trim());
+    }).length;
+
+    const todayIso = dateISO(new Date());
+
+    const missingPastDays = rows.filter(
+      (row) =>
+        row.date_iso <= todayIso &&
+        !row.notes?.trim() &&
+        activeTeachers.every(
+          (teacher) =>
+            !(row.completed[teacher.id] || row.cancelled[teacher.id]),
+        ),
+    ).length;
+
+    return {
+      perTeacher,
+      completed,
+      cancelled,
+      updatedDays,
+      missingPastDays,
+      completionRate:
+        completed + cancelled > 0
+          ? ((completed / (completed + cancelled)) * 100).toFixed(1)
+          : "100.0",
+    };
+  }, [activeTeachers, rows]);
+
+  const chartData = useMemo(
+    () =>
+      totals.perTeacher.map((item) => ({
+        name: item.teacher.name,
+        completed: item.completed,
+        cancelled: item.cancelled,
+      })),
+    [totals.perTeacher],
+  );
+
+  const trendData = useMemo(
+    () =>
+      rows.map((row) => ({
+        date: row.date_label.slice(0, 6),
+        completed: activeTeachers.reduce(
+          (sum, teacher) => sum + (row.completed[teacher.id] || 0),
+          0,
+        ),
+        cancelled: activeTeachers.reduce(
+          (sum, teacher) => sum + (row.cancelled[teacher.id] || 0),
+          0,
+        ),
+      })),
+    [activeTeachers, rows],
+  );
+
+  if (loading) {
+    return (
+      <div className="flex h-72 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* ── Header ─────────────────────────────────────── */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Class Tracker</h1>
-          <p className="text-muted-foreground">Monitor instructor class completion and cancellations. Month cycle: 25th to 25th.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">
+              Advanced Class Portal
+            </h1>
+            <Badge variant="secondary">25th → 24th monthly cycle</Badge>
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            Zainab, Aniqa, and Bilal can update their daily class records from
+            their own portal. The calendar starts from 25-Mar-2026 and continues
+            through 2027.
+          </p>
         </div>
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goPrevMonth} disabled={allMonths.indexOf(selectedMonth) >= allMonths.length - 1}><ChevronLeft className="h-4 w-4" /></Button>
-            <select value={selectedMonth} onChange={e => switchMonth(e.target.value)}
-              className="bg-transparent border-0 text-sm font-semibold focus:outline-none focus:ring-0 cursor-pointer min-w-[180px] px-2">
-              {allMonths.map(mk => <option key={mk} value={mk}>{getMonthLabel(mk)}</option>)}
-            </select>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goNextMonth} disabled={allMonths.indexOf(selectedMonth) <= 0}><ChevronRight className="h-4 w-4" /></Button>
-          </div>
-          {selectedMonth && <span className="text-xs text-muted-foreground hidden sm:inline">{getMonthRange(selectedMonth)}</span>}
-          <select value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-            <option value="all">All Instructors</option>
-            {ALL_KEYS.map(k => <option key={k} value={k}>{LABEL_MAP[k]}</option>)}
-          </select>
-          <div className="flex items-center gap-2 flex-wrap lg:ml-auto">
-            <Dialog open={uploadOpen} onOpenChange={o => { setUploadOpen(o); if (!o) resetUpload(); }}>
-              <DialogTrigger asChild><Button size="sm"><Upload className="mr-2 h-4 w-4" />Upload</Button></DialogTrigger>
-              <DialogContent><DialogHeader><DialogTitle>Upload CSV</DialogTitle></DialogHeader><UploadBody /></DialogContent>
-            </Dialog>
-            <Button variant="outline" size="sm" onClick={dlCSV} disabled={monthData.length === 0}><Download className="mr-2 h-4 w-4" />CSV</Button>
-            <Button variant="outline" size="sm" onClick={dlExcel} disabled={monthData.length === 0}><FileSpreadsheet className="mr-2 h-4 w-4" />Excel</Button>
-            <div className="w-px h-6 bg-border" />
-            <Button variant="outline" size="sm" onClick={pushToSupabase} disabled={pushing || monthData.length === 0}><CloudUpload className="mr-2 h-4 w-4" />{pushing ? "Pushing..." : "Push"}</Button>
-            <Button variant="outline" size="sm" onClick={pullFromSupabase} disabled={pulling}><CloudDownload className="mr-2 h-4 w-4" />{pulling ? "Pulling..." : "Pull"}</Button>
-            <Dialog open={sqlOpen} onOpenChange={setSqlOpen}>
-              <DialogTrigger asChild><Button variant="ghost" size="icon" className="h-9 w-9"><Database className="h-4 w-4" /></Button></DialogTrigger>
-              <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Supabase Table Schema</DialogTitle></DialogHeader>
-                <p className="text-sm text-muted-foreground mb-3">Run this in your Supabase SQL Editor:</p>
-                <pre className="bg-muted p-4 rounded-lg text-xs overflow-auto max-h-72 whitespace-pre-wrap">{SQL_SCHEMA}</pre>
-              </DialogContent>
-            </Dialog>
-          </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={refreshAll}>
+            <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
+          </Button>
+          <Button onClick={saveAll} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />{" "}
+            {saving ? "Saving..." : "Save Month"}
+          </Button>
         </div>
       </div>
 
-      {/* ── Dirty banner ───────────────────────────────── */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase text-muted-foreground">
+                User Portal
+              </span>
+              <select
+                value={selectedUser}
+                onChange={(e) => {
+                  if (
+                    isDirty &&
+                    !confirm(
+                      "You have unsaved changes. Discard them and switch user?",
+                    )
+                  ) {
+                    return;
+                  }
+
+                  setSelectedUser(e.target.value);
+                  setLogs([]);
+                }}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              >
+                {PORTAL_USERS.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase text-muted-foreground">
+                Month Filter
+              </span>
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  if (
+                    isDirty &&
+                    !confirm(
+                      "You have unsaved changes. Discard them and switch month?",
+                    )
+                  ) {
+                    return;
+                  }
+
+                  setSelectedMonth(e.target.value);
+                  setLogs([]);
+                }}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              >
+                {monthKeys.map((monthKey) => (
+                  <option key={monthKey} value={monthKey}>
+                    {getMonthLabel(monthKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-xs font-semibold uppercase text-muted-foreground">
+                Teacher Filter
+              </span>
+              <select
+                value={selectedTeacher}
+                onChange={(e) => setSelectedTeacher(e.target.value)}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="all">All Teachers</option>
+                {allTeachers.map((teacher, index) => (
+                  <option
+                    key={`filter-${selectedUser}-${teacher.id}-${index}`}
+                    value={teacher.id}
+                  >
+                    {teacher.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Filter className="h-3.5 w-3.5" />
+            <span>{getMonthRange(selectedMonth)}</span>
+            <span>•</span>
+            <span>{rows.length} calendar rows</span>
+            <span>•</span>
+            <span>Current user: {currentUser.displayName}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {status && (
+        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+          {status}
+        </div>
+      )}
+
+      {changeNotice && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+          <div className="flex items-center gap-2 font-semibold">
+            <Bell className="h-4 w-4" />
+            New change detected
+          </div>
+          <p className="mt-1">{changeNotice}</p>
+        </div>
+      )}
+
       {isDirty && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" /><span className="text-sm font-semibold text-amber-800 dark:text-amber-300">Unsaved changes</span></div>
-          <span className="text-xs text-muted-foreground hidden sm:inline">Click cells to edit — totals auto-recalculate</span>
-          <div className="sm:ml-auto flex gap-2">
-            <Button size="sm" onClick={pushToSupabase} disabled={pushing}><Save className="mr-1 h-3 w-3" />Save to Supabase</Button>
-            <Button size="sm" variant="ghost" onClick={discardChanges} className="text-amber-700 hover:text-amber-900 dark:text-amber-400"><RotateCcw className="mr-1 h-3 w-3" />Discard</Button>
+        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2 font-semibold">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+            Unsaved changes
           </div>
+          <p className="text-sm opacity-80">
+            Click Save Now to store this month’s record permanently.
+          </p>
+          <Button
+            className="sm:ml-auto"
+            size="sm"
+            onClick={saveAll}
+            disabled={saving}
+          >
+            <Save className="mr-2 h-4 w-4" /> Save Now
+          </Button>
         </div>
       )}
 
-      {/* ── Empty month state ──────────────────────────── */}
-      {monthData.length === 0 && !loading && (
-        <Card><CardContent className="py-12 text-center">
-          <p className="text-muted-foreground mb-4">No data for {getMonthLabel(selectedMonth)}. Upload a CSV to add records.</p>
-          <Button onClick={() => setUploadOpen(true)}><Upload className="mr-2 h-4 w-4" />Upload CSV for {getMonthLabel(selectedMonth)}</Button>
-        </CardContent></Card>
-      )}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard
+          title="Completed"
+          value={totals.completed}
+          desc="Selected month total"
+          icon={CheckCircle2}
+          variant="success"
+        />
+        <MetricCard
+          title="Cancelled"
+          value={totals.cancelled}
+          desc="Selected month total"
+          icon={XCircle}
+          variant="danger"
+        />
+        <MetricCard
+          title="Updated Days"
+          value={`${totals.updatedDays}/${rows.length}`}
+          desc="Days with entry or notes"
+          icon={CalendarDays}
+        />
+        <MetricCard
+          title="Completion Rate"
+          value={`${totals.completionRate}%`}
+          desc="Completed / total classes"
+          icon={CloudUpload}
+          variant="success"
+        />
+        <MetricCard
+          title="Missing Past Days"
+          value={totals.missingPastDays}
+          desc="Days that still need updates"
+          icon={AlertCircle}
+          variant={totals.missingPastDays ? "warning" : "success"}
+        />
+      </div>
 
-      {/* ── Metric Cards ───────────────────────────────── */}
-      {monthData.length > 0 && (<>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <MC title={isTeacherView ? `${LABEL_MAP[selectedTeacher]} Completed` : "Total Completed"} value={totalC} icon={CheckCircle2} desc={isTeacherView ? "This instructor" : "All instructors combined"} variant="success" />
-          <MC title={isTeacherView ? `${LABEL_MAP[selectedTeacher]} Cancelled` : "Total Cancelled"} value={totalX} icon={XCircle} desc={isTeacherView ? "This instructor" : "All instructors combined"} variant="danger" />
-          <MC title="Working Days" value={days} icon={CalendarDays} desc={isTeacherView ? LABEL_MAP[selectedTeacher] : "In this period"} variant="info" />
-          <MC title="Avg / Day" value={avg} icon={TrendingUp} desc="Completed daily average" variant="default" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <MC title="Completion Rate" value={`${rate}%`} icon={CheckCircle2} desc="Completed / Total" variant="success" />
-          {!isTeacherView && <MC title="Top Performer" value={LABEL_MAP[topPerformer]} icon={TrendingUp} desc={`${totals.completed[topPerformer]} classes`} variant="default" />}
-          <MC title="Session Edits" value={editLogs.length} icon={Pencil} desc="Changes this session" variant={editLogs.length > 0 ? "info" : "default"} />
-          <MC title="High Cancel Days" value={highCancelDays.length} icon={AlertCircle} desc="Days with 3+ cancellations" variant={highCancelDays.length > 0 ? "danger" : "success"} />
-        </div>
-      </>)}
-
-      {/* ── Charts ─────────────────────────────────────── */}
-      {monthData.length > 0 && (
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader><CardTitle className="text-base">{isTeacherView ? LABEL_MAP[selectedTeacher] : "Per-Instructor"} Breakdown</CardTitle></CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barData} layout="vertical" margin={{ left: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="name" width={isTeacherView ? 100 : 80} tick={{ fontSize: 11 }} />
-                    <Tooltip />
-                    <Bar dataKey="completed" fill="#059669" name="Completed" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="cancelled" fill="#DC2626" name="Cancelled" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-          <div className="grid gap-6">
-            <Card>
-              <CardHeader><CardTitle className="text-base">Completed vs Cancelled</CardTitle></CardHeader>
-              <CardContent>
-                <div className="h-[180px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={3} dataKey="value"
-                        label={({ name, percent }) => percent ? `${name} ${(percent * 100).toFixed(0)}%` : name}>
-                        {pieData.map((_, i) => <Cell key={i} fill={PIE_C[i]} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-base">Daily Trend</CardTitle></CardHeader>
-              <CardContent>
-                <div className="h-[120px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={4} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Area type="monotone" dataKey="completed" stroke="#059669" fill="#059669" fillOpacity={0.15} name="Completed" />
-                      <Area type="monotone" dataKey="cancelled" stroke="#DC2626" fill="#DC2626" fillOpacity={0.1} name="Cancelled" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* ── Data Table ─────────────────────────────────── */}
-      {monthData.length > 0 && (
-        <div className="rounded-lg border bg-card overflow-hidden">
-          <div className="px-4 py-2 border-b bg-muted/30 flex items-center gap-2 text-xs text-muted-foreground">
-            <Pencil className="h-3 w-3" />
-            {isTeacherView ? `Editing ${LABEL_MAP[selectedTeacher]}'s data. Click a value to edit.` : "Click any instructor cell to edit. Enter/Tab to save, Escape to cancel."}
-          </div>
-          <div className="overflow-auto max-h-[65vh]">
-            {isTeacherView ? (
-              <table className="w-full text-sm" style={{ minWidth: 400 }}>
-                <thead className="sticky top-0 z-20">
-                  <tr>
-                    <th className="sticky left-0 z-30 bg-card border-b border-r px-4 py-3 text-left font-bold text-xs uppercase">Date</th>
-                    <th className="bg-emerald-600 text-white px-4 py-2.5 text-xs font-bold text-center">Completed</th>
-                    <th className="bg-red-600 text-white px-4 py-2.5 text-xs font-bold text-center">Cancelled</th>
-                    <th className="bg-muted/80 px-4 py-2.5 text-xs font-bold text-center">Net</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthData.map((r, i) => {
-                    const cv = (r.completed as Record<string, number>)[selectedTeacher] || 0;
-                    const xv = (r.cancelled as Record<string, number>)[selectedTeacher] || 0;
-                    return (
-                      <tr key={r.date + i} className="border-b hover:bg-muted/30 transition-colors even:bg-muted/10">
-                        <td className="sticky left-0 z-10 bg-card dark:bg-card px-4 py-2 font-semibold text-xs border-r whitespace-nowrap">{r.date}</td>
-                        <td className="px-2 py-1.5 text-center">
-                          <EditableCell value={cv} onSave={v => handleCellSave(i, "completed", selectedTeacher, v)} rowIdx={i} colKey={`tc-${selectedTeacher}`} />
-                        </td>
-                        <td className="px-2 py-1.5 text-center">
-                          <EditableCell value={xv} onSave={v => handleCellSave(i, "cancelled", selectedTeacher, v)} rowIdx={i} colKey={`tx-${selectedTeacher}`} />
-                        </td>
-                        <td className={`px-4 py-2 text-center font-bold text-sm ${cv - xv >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>{cv - xv}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="sticky bottom-0 z-20">
-                  <tr className="border-t-2 bg-muted/50 backdrop-blur-sm">
-                    <td className="sticky left-0 z-10 bg-muted/80 px-4 py-3 font-bold text-xs uppercase border-r">Total</td>
-                    <td className="px-4 py-3 text-center font-bold text-emerald-700 dark:text-emerald-400">{teacherTotals!.completed}</td>
-                    <td className="px-4 py-3 text-center font-bold text-red-700 dark:text-red-400">{teacherTotals!.cancelled}</td>
-                    <td className={`px-4 py-3 text-center font-bold ${teacherTotals!.completed - teacherTotals!.cancelled >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>{teacherTotals!.completed - teacherTotals!.cancelled}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            ) : (
-              <table className="w-full text-sm border-collapse" style={{ minWidth: 1600 }}>
-                <thead className="sticky top-0 z-20">
-                  <tr>
-                    <th rowSpan={2} className="sticky left-0 z-30 bg-card border-b border-r px-4 py-3 text-left font-bold text-xs uppercase">Date</th>
-                    <th colSpan={11} className="bg-emerald-600 text-white px-3 py-2.5 text-xs font-bold uppercase text-center">Completed Classes</th>
-                    <th rowSpan={2} className="bg-emerald-600 text-white border-l border-white/20 px-3 py-2 text-xs font-bold text-center min-w-[60px]">Total</th>
-                    <th colSpan={11} className="bg-red-600 text-white px-3 py-2.5 text-xs font-bold uppercase text-center">Cancelled Classes</th>
-                    <th rowSpan={2} className="bg-red-600 text-white border-l border-white/20 px-3 py-2 text-xs font-bold text-center min-w-[60px]">Total</th>
-                  </tr>
-                  <tr>
-                    {C_LABELS.map(l => <th key={`c-${l}`} className="bg-emerald-50 dark:bg-emerald-950/40 px-2 py-2 text-[11px] font-semibold text-center border-b">{l}</th>)}
-                    {X_LABELS.map(l => <th key={`x-${l}`} className="bg-red-50 dark:bg-red-950/40 px-2 py-2 text-[11px] font-semibold text-center border-b">{l}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthData.map((r, ri) => (
-                    <tr key={r.date + ri} className="border-b hover:bg-muted/30 transition-colors even:bg-muted/10">
-                      <td className="sticky left-0 z-10 bg-card dark:bg-card px-4 py-2 font-semibold text-xs border-r whitespace-nowrap">{r.date}</td>
-                      {C_KEYS.map(k => (
-                        <td key={`c-${k}`} className="px-1 py-1.5 text-center">
-                          <EditableCell value={r.completed[k] || 0} onSave={v => handleCellSave(ri, "completed", k, v)} rowIdx={ri} colKey={`c-${k}`} />
-                        </td>
-                      ))}
-                      <td className="px-2 py-2 text-center font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 border-l border-r text-sm relative">
-                        {r.completed.dailyTotal}
-                        <span className="absolute bottom-0.5 right-1 text-[7px] font-normal text-muted-foreground/60 uppercase">auto</span>
-                      </td>
-                      {X_KEYS.map(k => (
-                        <td key={`x-${k}`} className="px-1 py-1.5 text-center">
-                          <EditableCell value={r.cancelled[k] || 0} onSave={v => handleCellSave(ri, "cancelled", k, v)} rowIdx={ri} colKey={`x-${k}`} />
-                        </td>
-                      ))}
-                      <td className="px-2 py-2 text-center font-bold text-red-700 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20 border-l text-sm relative">
-                        {r.cancelled.dailyTotal}
-                        <span className="absolute bottom-0.5 right-1 text-[7px] font-normal text-muted-foreground/60 uppercase">auto</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="sticky bottom-0 z-20">
-                  <tr className="border-t-2 bg-muted/50 backdrop-blur-sm">
-                    <td className="sticky left-0 z-10 bg-muted/80 dark:bg-muted/80 px-4 py-3 font-bold text-xs uppercase border-r">Grand Total</td>
-                    {C_KEYS.map(k => <td key={`tc-${k}`} className={`px-2 py-3 text-center font-bold text-sm ${totals.completed[k] > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground/30"}`}>{totals.completed[k]}</td>)}
-                    <td className="px-2 py-3 text-center font-bold text-sm text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/30 border-l border-r">{totals.grandCompleted}</td>
-                    {X_KEYS.map(k => <td key={`tx-${k}`} className={`px-2 py-3 text-center font-bold text-sm ${totals.cancelled[k] > 0 ? "text-red-700 dark:text-red-400" : "text-muted-foreground/30"}`}>{totals.cancelled[k]}</td>)}
-                    <td className="px-2 py-3 text-center font-bold text-sm text-red-700 dark:text-red-400 bg-red-100/60 dark:bg-red-950/30 border-l">{totals.grandCancelled}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Quick Actions + Edits ──────────────────────── */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 xl:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-base">Quick Actions</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full justify-start text-sm" onClick={() => setUploadOpen(true)}><Upload className="mr-2 h-4 w-4" />Upload CSV</Button>
-            <Button variant="outline" className="w-full justify-start text-sm" onClick={dlCSV} disabled={monthData.length === 0}><Download className="mr-2 h-4 w-4" />Download CSV</Button>
-            <Button variant="outline" className="w-full justify-start text-sm" onClick={dlExcel} disabled={monthData.length === 0}><FileSpreadsheet className="mr-2 h-4 w-4" />Download Excel</Button>
-            <Button variant="outline" className="w-full justify-start text-sm" onClick={pushToSupabase} disabled={pushing || monthData.length === 0}><CloudUpload className="mr-2 h-4 w-4" />Push to Supabase</Button>
-            <Button variant="outline" className="w-full justify-start text-sm" onClick={pullFromSupabase} disabled={pulling}><CloudDownload className="mr-2 h-4 w-4" />Pull from Supabase</Button>
-          </CardContent>
-        </Card>
-        <Card className="md:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Recent Edits</CardTitle>
-            {editLogs.length > 0 && <Badge variant="secondary" className="text-xs">{editLogs.length} changes</Badge>}
+          <CardHeader>
+            <CardTitle className="text-base">Teacher Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
-            {editLogs.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Pencil className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No edits yet. Click any cell to start editing.</p>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[280px] overflow-auto">
-                {editLogs.map(log => (
-                  <div key={log.id} className="flex items-start gap-3 pb-3 border-b last:border-0">
-                    <div className={`p-1.5 rounded-md mt-0.5 ${log.section === "Completed" ? "bg-emerald-100 dark:bg-emerald-950/40" : "bg-red-100 dark:bg-red-950/40"}`}>
-                      {log.section === "Completed" ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{log.date} — {log.detail}</p>
-                      <p className="text-xs text-muted-foreground">{log.section} · {log.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Alerts ─────────────────────────────────────── */}
-      {highCancelDays.length > 0 && (
-        <Card className="bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-4">
-              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
-              <div>
-                <h3 className="font-semibold text-red-800 dark:text-red-300 mb-2">High Cancellation Days</h3>
-                <ul className="space-y-1 text-sm text-red-700 dark:text-red-400">
-                  {highCancelDays.map(d => <li key={d.date}><strong>{d.date}</strong> — {d.cancelled.dailyTotal} classes cancelled</li>)}
-                </ul>
-              </div>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} layout="vertical" margin={{ left: 25 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={95}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip />
+                  <Bar dataKey="completed" name="Completed" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="cancelled" name="Cancelled" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
-      )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Daily Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={4} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Area
+                    type="monotone"
+                    dataKey="completed"
+                    name="Completed"
+                    fillOpacity={0.15}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="cancelled"
+                    name="Cancelled"
+                    fillOpacity={0.12}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Dialog open={teacherOpen} onOpenChange={setTeacherOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline">
+              <Settings className="mr-2 h-4 w-4" /> Manage Teachers
+            </Button>
+          </DialogTrigger>
+
+          <DialogContent className="h-[86vh] w-[96vw] max-w-none overflow-hidden p-0 sm:max-w-[1200px]">
+            <div className="flex h-full flex-col">
+              <div className="border-b px-6 py-4">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold">
+                    Teacher Management — {currentUser.displayName}
+                  </DialogTitle>
+                </DialogHeader>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Add, edit, show, hide, and remove teachers for this user only. Every teacher shown here becomes a column in the Daily Update Table.
+                </p>
+              </div>
+
+              <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[300px_1fr]">
+                <aside className="min-h-0 overflow-auto border-r bg-muted/20 p-4">
+                  <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                    <div className="mb-4">
+                      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                        {teacherForm.mode === "edit" ? "Edit Teacher" : "Add Teacher"}
+                      </p>
+                      <h3 className="mt-1 text-lg font-bold">
+                        {teacherForm.mode === "edit" ? "Update teacher" : "Create new teacher"}
+                      </h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        The teacher will appear as a column in the daily table.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase text-muted-foreground">
+                          Teacher Name
+                        </label>
+                        <input
+                          value={teacherForm.name}
+                          onChange={(e) =>
+                            setTeacherForm((prev) => ({
+                              ...prev,
+                              name: e.target.value,
+                            }))
+                          }
+                          placeholder="Example: Ayesha Khan"
+                          className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none transition focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+
+                      {teacherForm.mode === "edit" && (
+                        <div className="rounded-xl border bg-muted/50 p-3">
+                          <p className="text-xs font-semibold">Editing teacher ID</p>
+                          <p className="mt-1 break-all text-xs text-muted-foreground">
+                            {teacherForm.id}
+                          </p>
+                        </div>
+                      )}
+
+                      <Button onClick={saveTeacherForm} className="h-11 w-full">
+                        <Save className="mr-2 h-4 w-4" />
+                        {teacherForm.mode === "edit" ? "Save Changes" : "Add Teacher"}
+                      </Button>
+
+                      {teacherForm.mode === "edit" && (
+                        <Button
+                          variant="outline"
+                          onClick={resetTeacherForm}
+                          className="h-10 w-full"
+                        >
+                          Cancel Edit
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border bg-card p-4">
+                    <p className="text-sm font-semibold">Current User</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {currentUser.displayName}
+                    </p>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="rounded-xl bg-muted p-3">
+                        <p className="text-xs text-muted-foreground">Teachers</p>
+                        <p className="mt-1 text-xl font-bold">{allTeachers.length}</p>
+                      </div>
+                      <div className="rounded-xl bg-muted p-3">
+                        <p className="text-xs text-muted-foreground">Columns</p>
+                        <p className="mt-1 text-xl font-bold">{visibleTeachers.length}</p>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+
+                <section className="min-w-0 overflow-hidden p-4">
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold">Teacher CRUD Table</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Manage teacher names, visibility, and removal from this user's portal.
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        resetTeacherForm();
+                        setTimeout(() => {
+                          const input = document.querySelector<HTMLInputElement>(
+                            'input[placeholder="Example: Ayesha Khan"]',
+                          );
+                          input?.focus();
+                        }, 50);
+                      }}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Teacher
+                    </Button>
+                  </div>
+
+                  <div className="rounded-2xl border bg-card shadow-sm">
+                    <div className="max-h-[52vh] overflow-auto">
+                      <table className="w-full min-w-[900px] border-collapse text-sm">
+                        <thead className="sticky top-0 z-10 bg-muted">
+                          <tr>
+                            <th className="w-14 border-b px-4 py-3 text-left text-xs font-bold uppercase text-muted-foreground">
+                              #
+                            </th>
+                            <th className="border-b px-4 py-3 text-left text-xs font-bold uppercase text-muted-foreground">
+                              Teacher Name
+                            </th>
+                            <th className="border-b px-4 py-3 text-left text-xs font-bold uppercase text-muted-foreground">
+                              Teacher ID
+                            </th>
+                            <th className="border-b px-4 py-3 text-left text-xs font-bold uppercase text-muted-foreground">
+                              Column Status
+                            </th>
+                            <th className="border-b px-4 py-3 text-right text-xs font-bold uppercase text-muted-foreground">
+                              CRUD Actions
+                            </th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {allTeachers.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-4 py-14 text-center">
+                                <p className="font-semibold">No teachers added yet</p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  Add the first teacher from the form on the left.
+                                </p>
+                              </td>
+                            </tr>
+                          ) : (
+                            allTeachers.map((teacher, index) => (
+                              <tr
+                                key={`teacher-crud-row-${selectedUser}-${teacher.id}-${index}`}
+                                className="border-b transition hover:bg-muted/40"
+                              >
+                                <td className="px-4 py-3">
+                                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                                    {index + 1}
+                                  </span>
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <p className="font-semibold">{teacher.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    User: {currentUser.displayName}
+                                  </p>
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <code className="rounded-md bg-muted px-2 py-1 text-xs">
+                                    {teacher.id}
+                                  </code>
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <Badge variant={teacher.is_active ? "secondary" : "outline"}>
+                                    {teacher.is_active ? "Visible in table" : "Hidden"}
+                                  </Badge>
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <div className="flex justify-end gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => startEditTeacher(teacher)}
+                                    >
+                                      <Pencil className="mr-2 h-3.5 w-3.5" />
+                                      Edit
+                                    </Button>
+
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={async () => {
+                                        const next = teachers.map((item) =>
+                                          item.id === teacher.id
+                                            ? {
+                                              ...item,
+                                              is_active: !item.is_active,
+                                            }
+                                            : item,
+                                        );
+
+                                        await saveTeachers(next);
+                                      }}
+                                    >
+                                      {teacher.is_active ? "Hide" : "Show"}
+                                    </Button>
+
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={deletingTeacherId === teacher.id}
+                                      onClick={() => deleteTeacher(teacher)}
+                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    >
+                                      <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                      {deletingTeacherId === teacher.id ? "Removing..." : "Remove"}
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+                    <p>
+                      <span className="font-semibold text-foreground">Add</span> creates a new teacher column.
+                      <span className="ml-1 font-semibold text-foreground">Edit</span> changes the teacher name.
+                      <span className="ml-1 font-semibold text-foreground">Hide</span> keeps the teacher saved but removes it from active use.
+                      <span className="ml-1 font-semibold text-foreground">Remove</span> deletes the teacher from this user's list and removes that teacher's saved values.
+                    </p>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Button variant="outline" onClick={downloadCSV}>
+          <Download className="mr-2 h-4 w-4" /> CSV
+        </Button>
+
+        <Button variant="outline" onClick={downloadExcel}>
+          <FileSpreadsheet className="mr-2 h-4 w-4" /> Excel
+        </Button>
+      </div>
+
+      <div className="rounded-xl border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
+          <div>
+            <p className="font-semibold">
+              Daily Update Table — {currentUser.displayName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Click any number to edit. Use notes for reasons, reminders, or
+              daily comments.
+            </p>
+          </div>
+
+          <Badge variant="secondary">{getMonthLabel(selectedMonth)}</Badge>
+        </div>
+
+        <div className="max-h-[58vh] overflow-auto">
+          <table
+            className="w-full border-collapse text-sm"
+            style={{
+              minWidth:
+                selectedTeacher === "all"
+                  ? Math.max(1500, 260 + visibleTeachers.length * 190)
+                  : 950,
+            }}
+          >
+            <thead className="sticky top-0 z-20 bg-card">
+              <tr>
+                <th
+                  rowSpan={2}
+                  className="sticky left-0 z-30 border-b border-r bg-card px-4 py-3 text-left text-xs font-bold uppercase"
+                >
+                  Date
+                </th>
+
+                {visibleTeachers.map((teacher, index) => (
+                  <th
+                    key={`teacher-head-main-${selectedUser}-${teacher.id}-${index}`}
+                    colSpan={2}
+                    className="border-b border-r bg-muted/70 px-3 py-2 text-center text-xs font-bold"
+                  >
+                    {teacher.name}
+                  </th>
+                ))}
+
+                <th
+                  rowSpan={2}
+                  className="border-b bg-muted/70 px-4 py-3 text-left text-xs font-bold uppercase"
+                >
+                  Notes
+                </th>
+              </tr>
+
+              <tr>
+                {visibleTeachers.map((teacher, index) => (
+                  <Fragment key={`teacher-head-sub-${selectedUser}-${teacher.id}-${index}`}>
+                    <th className="border-b px-2 py-2 text-center text-[11px] font-semibold text-emerald-700">
+                      Completed
+                    </th>
+                    <th className="border-b border-r px-2 py-2 text-center text-[11px] font-semibold text-red-700">
+                      Cancelled
+                    </th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {rows.map((row, rowIndex) => {
+                const today = row.date_iso === dateISO(new Date());
+
+                const rowTotal = activeTeachers.reduce(
+                  (sum, teacher) =>
+                    sum +
+                    (row.completed[teacher.id] || 0) +
+                    (row.cancelled[teacher.id] || 0),
+                  0,
+                );
+
+                return (
+                  <tr
+                    key={row.date_iso}
+                    className={`border-b hover:bg-muted/30 ${today
+                      ? "bg-primary/5"
+                      : rowIndex % 2
+                        ? "bg-muted/10"
+                        : ""
+                      }`}
+                  >
+                    <td className="sticky left-0 z-10 whitespace-nowrap border-r bg-card px-4 py-2 text-xs font-semibold">
+                      <div className="flex items-center gap-2">
+                        {row.date_label}
+
+                        {today && <Badge className="text-[10px]">Today</Badge>}
+
+                        {rowTotal === 0 &&
+                          !row.notes &&
+                          row.date_iso <= dateISO(new Date()) && (
+                            <span
+                              title="No update yet"
+                              className="h-2 w-2 rounded-full bg-amber-500"
+                            />
+                          )}
+                      </div>
+                    </td>
+
+                    {visibleTeachers.map((teacher, teacherIndex) => (
+                      <Fragment key={`teacher-cell-${selectedUser}-${row.date_iso}-${teacher.id}-${teacherIndex}`}>
+                        <td className="px-1 py-1.5 text-center">
+                          <EditableCell
+                            value={row.completed[teacher.id] || 0}
+                            onSave={(value) =>
+                              updateCell(rowIndex, "completed", teacher, value)
+                            }
+                          />
+                        </td>
+
+                        <td className="border-r px-1 py-1.5 text-center">
+                          <EditableCell
+                            value={row.cancelled[teacher.id] || 0}
+                            onSave={(value) =>
+                              updateCell(rowIndex, "cancelled", teacher, value)
+                            }
+                          />
+                        </td>
+                      </Fragment>
+                    ))}
+
+                    <td className="min-w-[220px] px-2 py-1.5">
+                      <input
+                        value={row.notes}
+                        onChange={(e) => updateNotes(rowIndex, e.target.value)}
+                        placeholder="Reason / notes"
+                        className="h-8 w-full rounded-md border bg-background px-2 text-xs"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+
+            <tfoot className="sticky bottom-0 z-20 bg-card">
+              <tr className="border-t-2 bg-muted/80">
+                <td className="sticky left-0 z-10 border-r bg-muted px-4 py-3 text-xs font-bold uppercase">
+                  Total
+                </td>
+
+                {visibleTeachers.map((teacher, teacherIndex) => {
+                  const completed = rows.reduce(
+                    (sum, row) => sum + (row.completed[teacher.id] || 0),
+                    0,
+                  );
+
+                  const cancelled = rows.reduce(
+                    (sum, row) => sum + (row.cancelled[teacher.id] || 0),
+                    0,
+                  );
+
+                  return (
+                    <Fragment key={`teacher-total-${selectedUser}-${teacher.id}-${teacherIndex}`}>
+                      <td className="px-2 py-3 text-center font-bold text-emerald-700">
+                        {completed}
+                      </td>
+                      <td className="border-r px-2 py-3 text-center font-bold text-red-700">
+                        {cancelled}
+                      </td>
+                    </Fragment>
+                  );
+                })}
+
+                <td className="px-4 py-3 text-xs font-semibold text-muted-foreground">
+                  Saved by user and date
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <History className="h-4 w-4" /> Recent Changes
+          </CardTitle>
+          <Badge variant="secondary">{logs.length}</Badge>
+        </CardHeader>
+
+        <CardContent>
+          {logs.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              <Pencil className="mx-auto mb-2 h-8 w-8 opacity-30" />
+              No recent changes in this session.
+            </div>
+          ) : (
+            <div className="max-h-72 space-y-3 overflow-auto">
+              {logs.map((log, index) => (
+                <div
+                  key={`log-${log.id}-${index}`}
+                  className="flex items-start gap-3 border-b pb-3 last:border-0"
+                >
+                  <div className="rounded-lg bg-muted p-2">
+                    {log.section === "cancelled" ? (
+                      <XCircle className="h-4 w-4" />
+                    ) : log.section === "notes" ? (
+                      <Pencil className="h-4 w-4" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">
+                      {log.date_label} — {log.teacher_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {log.detail} · {log.time}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

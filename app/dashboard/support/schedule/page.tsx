@@ -1486,250 +1486,379 @@ useEffect(() => {
         </div>
 
         <Dialog
-          open={isCreateModalOpen}
-          onOpenChange={(open) => {
-            setIsCreateModalOpen(open)
-            if (!open) {
-              setIsSlotCreate(false)
-              setShowStudentResults(false)
-            }
-          }}
-        >
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {editingEventId ? 'Edit Class' : 'Schedule a Class'}
-              </DialogTitle>
-              <DialogDescription>
-                {isSlotCreate
-                  ? 'Selected slot is pre-filled. Complete the details below.'
-                  : 'Create a new class schedule entry.'}
-              </DialogDescription>
-            </DialogHeader>
+  open={isCreateModalOpen}
+  onOpenChange={(open) => {
+    setIsCreateModalOpen(open)
+    if (!open) {
+      setIsSlotCreate(false)
+      setShowStudentResults(false)
+    }
+  }}
+>
+  <DialogContent className="flex h-[calc(100dvh-24px)] max-h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-none overflow-hidden p-0 sm:max-w-[1180px]">
+    <div className="flex min-h-0 w-full flex-col overflow-hidden">
+      <div className="shrink-0 border-b px-5 py-3">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold">
+            {editingEventId ? 'Edit Scheduled Class' : 'Schedule a Class'}
+          </DialogTitle>
+          <DialogDescription>
+            {isSlotCreate
+              ? 'Selected calendar slot is already filled. Review and complete the class details below.'
+              : 'Create a professional class schedule entry with teacher, student, subject, time, and status.'}
+          </DialogDescription>
+        </DialogHeader>
+      </div>
 
-            {isSlotCreate && slotInfo && (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20">
-                <div className="flex-shrink-0 p-2 rounded-full bg-primary/20">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="min-h-0 overflow-y-auto border-r bg-muted/20 p-3">
+          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+            <div className="mb-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Class Summary
+              </p>
+              <h3 className="mt-1 text-lg font-bold">
+                {editingEventId ? 'Update class' : 'New class'}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                This panel shows the main details before saving.
+              </p>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="rounded-xl bg-muted p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">
+                  Teacher
+                </p>
+                <p className="mt-1 font-semibold">
+                  {teachersData.find((t) => t.id === newEventData.teacherId)?.name ||
+                    'Not selected'}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-muted p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">
+                  Date & Time
+                </p>
+                <p className="mt-1 font-semibold">
+                  {newEventData.date || 'No date selected'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {newEventData.startTime} — {newEventData.endTime}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-muted p-3">
+                  <p className="text-xs text-muted-foreground">Subject</p>
+                  <p className="mt-1 truncate font-semibold">
+                    {newEventData.subject || 'N/A'}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-muted p-3">
+                  <p className="text-xs text-muted-foreground">Grade</p>
+                  <p className="mt-1 truncate font-semibold">
+                    {newEventData.grade || 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-muted p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">
+                  Status
+                </p>
+                <Badge className="mt-2 capitalize" variant="secondary">
+                  {newEventData.status}
+                </Badge>
+              </div>
+
+              {(newEventData.status === 'booked' ||
+                newEventData.status === 'reschedule' ||
+                newEventData.status === 'trial') && (
+                <div className="rounded-xl bg-muted p-3">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">
+                    Student
+                  </p>
+                  <p className="mt-1 font-semibold">
+                    {newEventData.studentName || 'Not selected'}
+                  </p>
+                  {newEventData.parentName && (
+                    <p className="text-xs text-muted-foreground">
+                      Parent: {newEventData.parentName}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {isSlotCreate && slotInfo && (
+            <div className="mt-4 rounded-2xl border bg-card p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-primary/10 p-2">
                   <Calendar className="h-5 w-5 text-primary" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-primary">
-                    Selected Slot
-                  </p>
-                  <p className="text-sm font-medium">
-                    {slotInfo.dayName}, {slotInfo.dateStr}
-                  </p>
+                <div>
+                  <p className="text-sm font-bold">Selected Slot</p>
+                  <p className="mt-1 text-sm">{slotInfo.dayName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {slotInfo.timeStr} • {slotInfo.teacherName}
+                    {slotInfo.dateStr}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-muted-foreground">
+                    {slotInfo.timeStr}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {slotInfo.teacherName}
                   </p>
                 </div>
               </div>
-            )}
+            </div>
+          )}
+        </aside>
+
+        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold">Class Details</h3>
+              <p className="text-sm text-muted-foreground">
+                Fill the required fields. Student fields appear based on class status.
+              </p>
+            </div>
 
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Teacher *</Label>
-                <Select
-                  value={newEventData.teacherId}
-                  onValueChange={(v) => {
-                    const teacher = teachersData.find((t) => t.id === v)
-                    setNewEventData({
-                      ...newEventData,
-                      teacherId: v,
-                      subject: teacher?.subject || newEventData.subject,
-                      grade: teacher?.grade || newEventData.grade,
-                    })
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select teacher" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teachersData.map((teacher) => (
-                      <SelectItem key={teacher.id} value={teacher.id}>
-                        {teacher.name} - {teacher.subject}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-semibold">Core Schedule Information</h4>
+                </div>
 
-              <div className="space-y-2">
-                <Label>Date *</Label>
-                <Input
-                  type="date"
-                  value={newEventData.date}
-                  onChange={(e) =>
-                    setNewEventData({ ...newEventData, date: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Start Time *</Label>
-                  <Input
-                    type="time"
-                    value={newEventData.startTime}
-                    onChange={(e) => {
-                      const newStart = e.target.value
-                      try {
-                        const start = parse(newStart, 'HH:mm', new Date())
-                        const end = addHoursToDate(start, 1)
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Teacher *</Label>
+                    <Select
+                      value={newEventData.teacherId}
+                      onValueChange={(v) => {
+                        const teacher = teachersData.find((t) => t.id === v)
                         setNewEventData({
                           ...newEventData,
-                          startTime: newStart,
-                          endTime: format(end, 'HH:mm'),
+                          teacherId: v,
+                          subject: teacher?.subject || newEventData.subject,
+                          grade: teacher?.grade || newEventData.grade,
                         })
-                      } catch {
+                      }}
+                    >
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Select teacher" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teachersData.map((teacher) => (
+                          <SelectItem key={teacher.id} value={teacher.id}>
+                            {teacher.name} - {teacher.subject}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Status *</Label>
+                    <Select
+                      value={newEventData.status}
+                      onValueChange={(v) =>
                         setNewEventData({
                           ...newEventData,
-                          startTime: newStart,
+                          status: v as ScheduleEvent['status'],
                         })
                       }
-                    }}
-                  />
+                    >
+                      <SelectTrigger className="h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="available">Available</SelectItem>
+                        <SelectItem value="booked">Booked</SelectItem>
+                        <SelectItem value="trial">Trial</SelectItem>
+                        <SelectItem value="reschedule">Reschedule</SelectItem>
+                        <SelectItem value="locked">Locked</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Date *</Label>
+                    <Input
+                      className="h-11"
+                      type="date"
+                      value={newEventData.date}
+                      onChange={(e) =>
+                        setNewEventData({
+                          ...newEventData,
+                          date: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Start Time *</Label>
+                      <Input
+                        className="h-11"
+                        type="time"
+                        value={newEventData.startTime}
+                        onChange={(e) => {
+                          const newStart = e.target.value
+                          try {
+                            const start = parse(newStart, 'HH:mm', new Date())
+                            const end = addHoursToDate(start, 1)
+                            setNewEventData({
+                              ...newEventData,
+                              startTime: newStart,
+                              endTime: format(end, 'HH:mm'),
+                            })
+                          } catch {
+                            setNewEventData({
+                              ...newEventData,
+                              startTime: newStart,
+                            })
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>End Time *</Label>
+                      <Input
+                        className="h-11"
+                        type="time"
+                        value={newEventData.endTime}
+                        onChange={(e) =>
+                          setNewEventData({
+                            ...newEventData,
+                            endTime: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Subject *</Label>
+                    <Select
+                      value={newEventData.subject || 'custom'}
+                      onValueChange={(value) => {
+                        if (value === 'custom') {
+                          setNewEventData({
+                            ...newEventData,
+                            subject: customSubject,
+                          })
+                        } else {
+                          setCustomSubject(value)
+                          setNewEventData({
+                            ...newEventData,
+                            subject: value,
+                          })
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Select subject" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subjectOptions.map((subject) => (
+                          <SelectItem key={subject} value={subject}>
+                            {subject}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="custom">Custom Subject</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Grade *</Label>
+                    <Select
+                      value={newEventData.grade}
+                      onValueChange={(v) =>
+                        setNewEventData({
+                          ...newEventData,
+                          grade: v,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Select grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Grade 1</SelectItem>
+                        <SelectItem value="2">Grade 2</SelectItem>
+                        <SelectItem value="3">Grade 3</SelectItem>
+                        <SelectItem value="4">Grade 4</SelectItem>
+                        <SelectItem value="5">Grade 5</SelectItem>
+                        <SelectItem value="6">Grade 6</SelectItem>
+                        <SelectItem value="7">Grade 7</SelectItem>
+                        <SelectItem value="8">Grade 8</SelectItem>
+                        <SelectItem value="9">Grade 9</SelectItem>
+                        <SelectItem value="10">Grade 10</SelectItem>
+                        <SelectItem value="11">Grade 11</SelectItem>
+                        <SelectItem value="12">Grade 12</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Custom Subject</Label>
+                    <Input
+                      className="h-11"
+                      placeholder="Type custom subject if needed"
+                      value={customSubject}
+                      onChange={(e) => {
+                        setCustomSubject(e.target.value)
+                        setNewEventData({
+                          ...newEventData,
+                          subject: e.target.value,
+                        })
+                      }}
+                    />
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>End Time *</Label>
-                  <Input
-                    type="time"
-                    value={newEventData.endTime}
-                    onChange={(e) =>
-                      setNewEventData({
-                        ...newEventData,
-                        endTime: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Subject *</Label>
-                <Select
-                  value={newEventData.subject || 'custom'}
-                  onValueChange={(value) => {
-                    if (value === 'custom') {
-                      setNewEventData({
-                        ...newEventData,
-                        subject: customSubject,
-                      })
-                    } else {
-                      setCustomSubject(value)
-                      setNewEventData({
-                        ...newEventData,
-                        subject: value,
-                      })
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select subject" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subjectOptions.map((subject) => (
-                      <SelectItem key={subject} value={subject}>
-                        {subject}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="custom">Custom Subject</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Input
-                  placeholder="Or type custom subject"
-                  value={customSubject}
-                  onChange={(e) => {
-                    setCustomSubject(e.target.value)
-                    setNewEventData({
-                      ...newEventData,
-                      subject: e.target.value,
-                    })
-                  }}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Grade *</Label>
-                <Select
-                  value={newEventData.grade}
-                  onValueChange={(v) =>
-                    setNewEventData({
-                      ...newEventData,
-                      grade: v,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select grade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Grade 1</SelectItem>
-                    <SelectItem value="2">Grade 2</SelectItem>
-                    <SelectItem value="3">Grade 3</SelectItem>
-                    <SelectItem value="4">Grade 4</SelectItem>
-                    <SelectItem value="5">Grade 5</SelectItem>
-                    <SelectItem value="6">Grade 6</SelectItem>
-                    <SelectItem value="7">Grade 7</SelectItem>
-                    <SelectItem value="8">Grade 8</SelectItem>
-                    <SelectItem value="9">Grade 9</SelectItem>
-                    <SelectItem value="10">Grade 10</SelectItem>
-                    <SelectItem value="11">Grade 11</SelectItem>
-                    <SelectItem value="12">Grade 12</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select
-                  value={newEventData.status}
-                  onValueChange={(v) =>
-                    setNewEventData({
-                      ...newEventData,
-                      status: v as ScheduleEvent['status'],
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="booked">Booked</SelectItem>
-                    <SelectItem value="trial">Trial</SelectItem>
-                    <SelectItem value="reschedule">Reschedule</SelectItem>
-                    <SelectItem value="locked">Locked</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               {(newEventData.status === 'booked' ||
                 newEventData.status === 'reschedule') && (
+                <div className="rounded-2xl border bg-card p-5 shadow-sm">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <h4 className="font-semibold">Current Student Details</h4>
+                  </div>
+
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Search Student *</Label>
-                      <Input
-                        placeholder="Type student name, ID, or parent name"
-                        value={studentSearch}
-                        onChange={(e) => {
-                          setStudentSearch(e.target.value)
-                          setShowStudentResults(true)
-                        }}
-                        onFocus={() => setShowStudentResults(true)}
-                      />
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          className="h-11 pl-9"
+                          placeholder="Type student name, ID, or parent name"
+                          value={studentSearch}
+                          onChange={(e) => {
+                            setStudentSearch(e.target.value)
+                            setShowStudentResults(true)
+                          }}
+                          onFocus={() => setShowStudentResults(true)}
+                        />
+                      </div>
                     </div>
 
                     {showStudentResults && (
-                      <div className="border rounded-lg max-h-48 overflow-y-auto bg-background">
+                      <div className="max-h-52 overflow-y-auto rounded-xl border bg-background shadow-sm">
                         {searchedStudents.length > 0 ? (
                           searchedStudents.map((student) => (
                             <button
                               key={student.id}
                               type="button"
-                              className="w-full text-left px-3 py-2 hover:bg-muted border-b last:border-b-0"
+                              className="w-full border-b px-4 py-3 text-left transition last:border-b-0 hover:bg-muted"
                               onClick={() => {
                                 setSelectedStudentId(student.id)
                                 setStudentSearch(student.name)
@@ -1755,126 +1884,150 @@ useEffect(() => {
                             </button>
                           ))
                         ) : (
-                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                          <div className="px-4 py-3 text-sm text-muted-foreground">
                             No student found
                           </div>
                         )}
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Student Name</Label>
-                        <Input value={newEventData.studentName} readOnly />
+                        <Input className="h-11" value={newEventData.studentName} readOnly />
                       </div>
 
                       <div className="space-y-2">
                         <Label>Student ID</Label>
-                        <Input value={newEventData.studentCode} readOnly />
+                        <Input className="h-11" value={newEventData.studentCode} readOnly />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Parent</Label>
-                        <Input value={newEventData.parentName} readOnly />
+                        <Input className="h-11" value={newEventData.parentName} readOnly />
                       </div>
 
                       <div className="space-y-2">
                         <Label>Learning Plan</Label>
-                        <Input value={newEventData.learningPlan} readOnly />
+                        <Input className="h-11" value={newEventData.learningPlan} readOnly />
                       </div>
+
+                      <div className="space-y-2">
+                        <Label>Classes / Week</Label>
+                        <Input
+                          className="h-11"
+                          value={String(newEventData.classesPerWeek || '')}
+                          readOnly
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {newEventData.status === 'trial' && (
+                <div className="rounded-2xl border bg-card p-5 shadow-sm">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <h4 className="font-semibold">Trial Student Details</h4>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Student Name *</Label>
+                      <Input
+                        className="h-11"
+                        placeholder="Enter student name"
+                        value={newEventData.studentName}
+                        onChange={(e) =>
+                          setNewEventData({
+                            ...newEventData,
+                            studentName: e.target.value,
+                          })
+                        }
+                      />
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Classes / Week</Label>
+                      <Label>Student Email *</Label>
                       <Input
-                        value={String(newEventData.classesPerWeek || '')}
-                        readOnly
+                        className="h-11"
+                        type="email"
+                        placeholder="student@example.com"
+                        value={newEventData.studentEmail}
+                        onChange={(e) =>
+                          setNewEventData({
+                            ...newEventData,
+                            studentEmail: e.target.value,
+                          })
+                        }
                       />
                     </div>
                   </div>
-                )}
-
-              {newEventData.status === 'trial' && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Student Name *</Label>
-                    <Input
-                      placeholder="Enter student name"
-                      value={newEventData.studentName}
-                      onChange={(e) =>
-                        setNewEventData({
-                          ...newEventData,
-                          studentName: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Student Email *</Label>
-                    <Input
-                      type="email"
-                      placeholder="student@example.com"
-                      value={newEventData.studentEmail}
-                      onChange={(e) =>
-                        setNewEventData({
-                          ...newEventData,
-                          studentEmail: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </>
+                </div>
               )}
 
-              <div className="space-y-2">
-                <Label>Notes (Optional)</Label>
-                <Textarea
-                  placeholder="Any special requests or topics to cover..."
-                  value={newEventData.notes}
-                  onChange={(e) =>
-                    setNewEventData({
-                      ...newEventData,
-                      notes: e.target.value,
-                    })
-                  }
-                />
-              </div>
+              <div className="rounded-2xl border bg-card p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-semibold">Notes</h4>
+                </div>
 
-              <div className="flex gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setIsCreateModalOpen(false)
-                    setIsSlotCreate(false)
-                    setShowStudentResults(false)
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1"
-                  onClick={handleCreateSchedule}
-                  disabled={
-                    !newEventData.teacherId ||
-                    !newEventData.subject ||
-                    !newEventData.grade ||
-                    !newEventData.date
-                  }
-                >
-                  {editingEventId
-                    ? 'Update Class'
-                    : isSlotCreate
-                      ? 'Schedule Class'
-                      : 'Create Schedule'}
-                </Button>
+                <div className="space-y-2">
+                  <Label>Notes Optional</Label>
+                  <Textarea
+                    className="min-h-20"
+                    placeholder="Any special request, topic, homework, or class instruction..."
+                    value={newEventData.notes}
+                    onChange={(e) =>
+                      setNewEventData({
+                        ...newEventData,
+                        notes: e.target.value,
+                      })
+                    }
+                  />
+                </div>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          </div>
+
+          <div className="shrink-0 border-t bg-card px-4 py-3">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                className="sm:w-36"
+                onClick={() => {
+                  setIsCreateModalOpen(false)
+                  setIsSlotCreate(false)
+                  setShowStudentResults(false)
+                }}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                className="sm:w-44"
+                onClick={handleCreateSchedule}
+                disabled={
+                  !newEventData.teacherId ||
+                  !newEventData.subject ||
+                  !newEventData.grade ||
+                  !newEventData.date
+                }
+              >
+                {editingEventId
+                  ? 'Update Class'
+                  : isSlotCreate
+                    ? 'Schedule Class'
+                    : 'Create Schedule'}
+              </Button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
       </div>
     </div>
   )
